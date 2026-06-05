@@ -8,7 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Money">
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='38' fill='%231a1e23'/%3E%3Ctext x='90' y='122' font-size='96' text-anchor='middle' fill='%232ecc71'%3E%C2%A5%3C/text%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>Personal Finance Tracker v3.0</title>
 <style>
 /* ═══════════════════════════════════════
@@ -1063,15 +1065,6 @@ document.getElementById('date').valueAsDate  = new Date();
 buildTplUI();
 applyTheme(localStorage.getItem('financeTrackerTheme')||'dark');
 setSyncStatus(urlOk()?'idle':'error', urlOk()?'☁️ Ready':'⚠️ Set URL');
-// ── PWA: attach an installable manifest (best effort; full offline needs hosting) ──
-try{
-  const ICON="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%231a1e23'/%3E%3Ctext x='256' y='350' font-size='280' text-anchor='middle' fill='%232ecc71'%3E%C2%A5%3C/text%3E%3C/svg%3E";
-  const mf={name:'Money Tracker',short_name:'Money',display:'standalone',orientation:'portrait',
-    background_color:'#1a1e23',theme_color:'#1a1e23',start_url:'.',scope:'.',
-    icons:[{src:ICON,sizes:'512x512',type:'image/svg+xml',purpose:'any maskable'}]};
-  const url=URL.createObjectURL(new Blob([JSON.stringify(mf)],{type:'application/manifest+json'}));
-  const l=document.createElement('link');l.rel='manifest';l.href=url;document.head.appendChild(l);
-}catch(e){}
 
 // ═══════════════════════════════════════════════
 // CLOCK
