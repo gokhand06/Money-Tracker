@@ -268,6 +268,17 @@ button:active { filter: brightness(0.9); }
 }
 .cc-row:first-child { border-top: none; }
 
+/* ── overflow safety: let filled cards SHRINK instead of stretching the page ── */
+.cgrid > * { min-width: 0; }
+.card { min-width: 0; overflow: hidden; overflow-wrap: anywhere; }
+.csub, .cdet, .clbl, .cval, .si-v, .si-l { overflow-wrap: anywhere; }
+.cc-row > span:first-child { min-width: 0; }
+.rec-it > div:first-child { min-width: 0; }
+.rec-n, .rec-m { overflow-wrap: anywhere; }
+.hi-l { min-width: 0; }
+.hi-t, .hi-m { overflow-wrap: anywhere; }
+.sec { overflow: hidden; }
+
 /* ═══════════════════════════════════════
    SECTIONS (recurring, sankey, history)
 ═══════════════════════════════════════ */
@@ -1816,7 +1827,7 @@ function renderTracked(){
     </div>`:'';
   let tip='';
   if(trackedInv.some(t=>t.ticker)&&!anyPrice)tip='<div class="muted" style="font-size:.72rem;margin-top:8px;">Tip: press 🔄 Refresh Prices to pull live market values.</div>';
-  c.innerHTML=header+'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;">'+cards+'</div>'+tip;
+  c.innerHTML=header+'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;">'+cards+'</div>'+tip;
 }
 
 // ── ticker config modal ──
