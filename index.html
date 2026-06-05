@@ -1,0 +1,2410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="theme-color" content="#1a1e23">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Money">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='38' fill='%231a1e23'/%3E%3Ctext x='90' y='122' font-size='96' text-anchor='middle' fill='%232ecc71'%3E%C2%A5%3C/text%3E%3C/svg%3E">
+<title>Personal Finance Tracker v3.0</title>
+<style>
+/* ═══════════════════════════════════════
+   DESIGN TOKENS
+═══════════════════════════════════════ */
+:root {
+  --bg:     #1a1e23;
+  --sb:     #22272e;
+  --card:   #22272e;
+  --inp:    #1e2228;
+  --text:   #cdd9e5;
+  --muted:  #8b949e;
+  --bdr:    #444c56;
+  --accent: #3498db;
+  --green:  #2ecc71;
+  --red:    #e74c3c;
+  --orange: #e67e22;
+  --purple: #9b59b6;
+  --yellow: #f1c40f;
+  --teal:   #16a085;
+
+  /* spacing scale */
+  --sp1: 6px;  --sp2: 10px;  --sp3: 16px;  --sp4: 20px;
+  /* radius */
+  --r-sm: 5px;  --r-md: 8px;  --r-lg: 10px;
+}
+
+/* ═══════════════════════════════════════
+   RESET & BASE
+═══════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 15px; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; overflow-x: clip; }  /* 15px base — comfortable on all screens */
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  overflow-x: clip;
+  max-width: 100vw;
+  line-height: 1.4;
+}
+
+/* ═══════════════════════════════════════
+   HAMBURGER & OVERLAY  (mobile only)
+═══════════════════════════════════════ */
+.burger {
+  display: none;
+  position: fixed; top: 12px; left: 12px; z-index: 310;
+  background: var(--accent); border: none; border-radius: var(--r-sm);
+  width: 42px; height: 42px;
+  align-items: center; justify-content: center;
+  cursor: pointer; color: #fff; font-size: 1.15rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+.overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.55); z-index: 299;
+}
+.overlay.show { display: block; }
+
+/* ═══════════════════════════════════════
+   SIDEBAR
+═══════════════════════════════════════ */
+.sb {
+  width: 295px;
+  flex-shrink: 0;
+  background: var(--sb);
+  height: 100vh;
+  overflow-y: auto;
+  position: sticky; top: 0;
+  border-right: 1px solid var(--bdr);
+  padding: var(--sp3);
+  display: flex; flex-direction: column; gap: 10px;
+}
+/* scrollbar in sidebar */
+.sb::-webkit-scrollbar { width: 4px; }
+.sb::-webkit-scrollbar-thumb { background: #333c47; border-radius: 4px; }
+
+.clock {
+  font-family: 'Consolas', monospace;
+  font-size: 0.8rem;
+  background: rgba(0,0,0,.35);
+  padding: 7px 10px; border-radius: var(--r-sm);
+  text-align: center; color: var(--muted);
+  letter-spacing: .3px;
+}
+.sb h2 { font-size: 1rem; color: #fff; font-weight: 700; }
+
+/* form elements */
+label {
+  display: block; font-size: 0.8rem;
+  color: var(--muted); margin-bottom: 4px; font-weight: 500;
+}
+.fg { margin-bottom: 9px; }
+
+input, select, textarea {
+  width: 100%; padding: 9px 11px;
+  border-radius: var(--r-sm); border: 1px solid var(--bdr);
+  background: var(--inp); color: var(--text);
+  font-size: 0.9rem; transition: border-color .15s;
+}
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+input[type="checkbox"] { width: auto; }
+
+.r2 { display: flex; gap: 8px; }
+.r2 > * { flex: 1; min-width: 0; }
+
+.cc-box {
+  display: none; background: rgba(0,0,0,.25);
+  padding: 10px; border-radius: var(--r-sm); margin-bottom: 9px;
+}
+.cc-pre { font-size: 0.75rem; color: var(--orange); margin-top: 5px; }
+
+.eur-box {
+  display: none;
+  background: rgba(52,152,219,.08);
+  border-left: 3px solid var(--accent);
+  padding: 10px; border-radius: 0 var(--r-sm) var(--r-sm) 0; margin-bottom: 9px;
+}
+.eur-calc { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+.ftag { display: none; font-size: 0.72rem; color: var(--purple); margin-left: 5px; }
+
+/* templates */
+.tpl-hdr { display: flex; justify-content: space-between; align-items: center; }
+.tpl-hdr span { color: #fff; font-size: 0.85rem; font-weight: 600; }
+.tpl-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 4px; max-height: 110px; overflow-y: auto; margin-top: 6px;
+}
+.tpl-btn {
+  background: #2d333b; color: var(--text);
+  font-size: 0.74rem; padding: 6px 7px;
+  border: 1px solid var(--bdr); border-radius: 3px;
+  cursor: pointer; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;
+}
+.tpl-btn:hover { background: var(--accent); border-color: var(--accent); }
+
+/* config box */
+.cfg-box { background: rgba(0,0,0,.2); border-radius: var(--r-sm); padding: 10px; }
+.cfg-row { display: flex; gap: 5px; margin-top: 4px; }
+.cfg-row input { flex: 1; }
+.cfg-row button { width: auto; padding: 6px 9px; font-size: 0.76rem; }
+
+/* ═══════════════════════════════════════
+   BUTTONS
+═══════════════════════════════════════ */
+button {
+  cursor: pointer; font-weight: 600; font-size: 0.9rem;
+  border: none; border-radius: var(--r-sm);
+  color: #fff; padding: 9px 14px;
+  transition: filter .15s, opacity .15s;
+}
+button:hover { filter: brightness(1.12); }
+button:active { filter: brightness(0.9); }
+
+.bf  { width: 100%; }
+.bp  { background: var(--accent); }
+.bg  { background: #444c56; }
+.bred { background: var(--red); }
+.bgrn { background: #27ae60; }
+.bpur { background: var(--purple); }
+.born { background: var(--orange); }
+.bteal { background: var(--teal); }
+.bcan { background: #7f8c8d; }
+.bsm  { padding: 5px 9px; font-size: 0.76rem; width: auto; }
+
+/* ═══════════════════════════════════════
+   MAIN CONTENT AREA
+═══════════════════════════════════════ */
+.main {
+  flex: 1; min-width: 0;
+  height: 100vh; overflow-y: auto; overflow-x: hidden;
+  padding: var(--sp4);
+}
+.main::-webkit-scrollbar { width: 5px; }
+.main::-webkit-scrollbar-thumb { background: #333c47; border-radius: 4px; }
+.main svg, .main canvas, .main img { max-width: 100%; }
+
+/* page header */
+.mhdr {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: var(--sp3); flex-wrap: wrap; gap: 10px;
+}
+.mhdr h1 { font-size: 1.3rem; color: #fff; font-weight: 700; }
+.hbtns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.hbtns button { width: auto; }
+
+/* month navigator */
+.mnav {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card); border: 1px solid var(--bdr);
+  border-radius: var(--r-md); padding: 10px 16px;
+  margin-bottom: var(--sp3);
+}
+.mnav-c { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; }
+#m-disp { font-size: 1.05rem; font-weight: 700; color: #fff; }
+.m-tag {
+  font-size: 0.72rem; color: #fff;
+  padding: 2px 10px; border-radius: 12px;
+  background: var(--accent); font-weight: 600;
+}
+.mnav button { background: #2d333b; width: auto; padding: 6px 13px; font-size: 1rem; }
+
+/* ═══════════════════════════════════════
+   SUMMARY BAR
+═══════════════════════════════════════ */
+.sbar {
+  background: var(--card); border: 1px solid var(--bdr);
+  border-radius: var(--r-md); padding: 12px 18px;
+  margin-bottom: var(--sp3);
+  display: flex;
+}
+.si {
+  flex: 1; padding: 4px 14px;
+  border-right: 1px solid var(--bdr);
+}
+.si:first-child { padding-left: 0; }
+.si:last-child  { border-right: none; }
+.si-l { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.si-v { font-size: 1.05rem; font-weight: 700; margin-top: 2px; }
+
+/* ═══════════════════════════════════════
+   DASHBOARD CARDS
+═══════════════════════════════════════ */
+.cgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
+  gap: 12px; margin-bottom: var(--sp3);
+}
+.card {
+  background: var(--card); padding: var(--sp3);
+  border-radius: var(--r-md); border: 1px solid var(--bdr);
+}
+.clbl {
+  font-size: 0.72rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 7px;
+}
+.cval { font-size: 1.5rem; font-weight: 700; }
+.csub {
+  font-size: 0.82rem; color: var(--muted);
+  margin-top: 7px; line-height: 1.85;
+}
+.csub strong { color: var(--text); }
+.cdet {
+  font-size: 0.74rem; color: var(--muted);
+  margin-top: 7px; border-top: 1px dashed var(--bdr); padding-top: 6px;
+}
+.cc-brk { font-size: 0.74rem; margin-top: 7px; }
+.cc-row {
+  display: flex; justify-content: space-between; gap: 8px;
+  padding: 4px 0; border-top: 1px dashed var(--bdr);
+}
+.cc-row:first-child { border-top: none; }
+
+/* ═══════════════════════════════════════
+   SECTIONS (recurring, sankey, history)
+═══════════════════════════════════════ */
+.sec {
+  background: var(--card); border: 1px solid var(--bdr);
+  border-radius: var(--r-md); padding: var(--sp3);
+  margin-bottom: var(--sp3);
+}
+.sechdr {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px;
+}
+.sechdr h3 { font-size: 0.95rem; color: #fff; font-weight: 600; }
+
+/* upcoming recurring */
+.rec-list { display: flex; flex-direction: column; gap: 6px; }
+.rec-it {
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--inp); border-left: 3px solid var(--orange);
+  border-radius: var(--r-sm); padding: 10px 13px;
+}
+.rec-it.paid  { border-left-color: var(--green); opacity: .65; }
+.rec-it.inv   { border-left-color: var(--accent); }
+.rec-it.fut   { border-left-color: var(--purple); }
+.rec-n  { font-size: 0.86rem; font-weight: 600; }
+.rec-m  { font-size: 0.73rem; color: var(--muted); margin-top: 2px; }
+.rec-a  { font-size: 0.92rem; font-weight: 700; white-space: nowrap; margin-left: 10px; }
+.pbdg {
+  display: inline-block; background: var(--green);
+  color: #fff; font-size: 0.64rem; padding: 1px 6px;
+  border-radius: 8px; font-weight: 700; margin-left: 5px;
+}
+
+/* sankey */
+.sk-sec {
+  background: var(--card); border: 1px solid var(--bdr);
+  border-radius: var(--r-md); padding: var(--sp3);
+  margin-bottom: var(--sp3);
+}
+.sk-hdr {
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 10px; margin-bottom: 12px;
+}
+.sk-m { display: flex; gap: 20px; }
+.met  { display: flex; flex-direction: column; text-align: center; }
+.met-l { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+.met-v { font-size: 1.05rem; font-weight: 700; }
+select.vsel {
+  background: var(--inp); border: 1px solid var(--bdr);
+  color: var(--text); padding: 8px 11px;
+  border-radius: var(--r-sm); font-size: 0.85rem; max-width: 100%;
+}
+
+/* history */
+.hflt {
+  display: flex; gap: 8px; margin-bottom: 10px;
+  flex-wrap: wrap; align-items: center;
+}
+.hflt select, .hflt input[type="text"] {
+  flex: 1; min-width: 100px; padding: 7px 10px; font-size: 0.83rem;
+}
+.hflt label {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 0.8rem; color: var(--muted);
+  margin: 0; white-space: nowrap;
+}
+.hul { list-style: none; max-height: 440px; overflow-y: auto; }
+.hul::-webkit-scrollbar { width: 4px; }
+.hul::-webkit-scrollbar-thumb { background: #333c47; border-radius: 4px; }
+
+.hi {
+  background: var(--inp); padding: 10px 13px;
+  border-radius: var(--r-sm); margin-bottom: 5px;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  border: 1px solid var(--bdr); border-left: 4px solid var(--accent);
+}
+.hi.inc { border-left-color: var(--green); }
+.hi.exp { border-left-color: var(--red); }
+.hi.ast { border-left-color: var(--yellow); }
+.hi.upc { border-left-color: var(--purple); }
+.hi-l  { flex: 1; }
+.hi-t  { font-size: 0.88rem; font-weight: 600; }
+.hi-m  {
+  font-size: 0.72rem; color: var(--muted);
+  display: flex; gap: 6px; flex-wrap: wrap;
+  align-items: center; margin-top: 3px;
+}
+.hi-r  {
+  display: flex; flex-direction: column;
+  align-items: flex-end; gap: 4px;
+  flex-shrink: 0; padding-left: 8px;
+}
+.hi-a  { font-size: 0.9rem; font-weight: 700; }
+.hi-b  { display: flex; gap: 4px; }
+
+/* badges */
+.bdg   { padding: 2px 6px; border-radius: 8px; font-size: 0.64rem; font-weight: 700; }
+.b-or  { background: var(--orange); color: #fff; }
+.b-pu  { background: var(--purple); color: #fff; }
+.b-bl  { background: var(--accent);  color: #fff; }
+.b-gr  { background: var(--green);   color: #fff; }
+.b-rd  { background: var(--red);     color: #fff; }
+
+/* ═══════════════════════════════════════
+   MODALS
+═══════════════════════════════════════ */
+.mbg {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.82); z-index: 400;
+  justify-content: center; align-items: flex-start;
+  padding: 32px 16px; overflow-y: auto;
+}
+.mbox {
+  background: var(--card); border: 1px solid var(--bdr);
+  border-radius: var(--r-md); padding: 22px;
+  width: 530px; max-width: 100%;
+  position: relative; margin: auto;
+}
+.mbox h2 { font-size: 1.05rem; color: #fff; margin-bottom: 8px; font-weight: 700; }
+.mbox h3 { font-size: 0.9rem;  color: #fff; margin: 14px 0 7px; }
+.mcls {
+  position: absolute; top: 14px; right: 14px;
+  background: none; border: none; color: var(--muted);
+  font-size: 1.15rem; cursor: pointer; width: auto; padding: 0;
+  line-height: 1;
+}
+.mcls:hover { color: #fff; }
+.hr { border: 0; height: 1px; background: var(--bdr); margin: 14px 0; }
+
+.rm-list {
+  max-height: 300px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.rm-it {
+  background: var(--inp); border-radius: var(--r-sm);
+  padding: 10px 13px;
+  display: flex; justify-content: space-between; align-items: center;
+  border-left: 3px solid var(--orange);
+}
+.rm-it.inactive { opacity: .4; border-left-color: var(--bdr); }
+.rm-n { font-size: 0.86rem; font-weight: 600; }
+.rm-m { font-size: 0.73rem; color: var(--muted); margin-top: 2px; }
+.rm-b { display: flex; gap: 4px; flex-shrink: 0; }
+
+.exp-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.exp-row button, .exp-row select, .exp-row input { flex: 1; padding: 8px; font-size: 0.86rem; }
+
+/* holdings */
+.hl-it {
+  background: var(--inp); border-radius: var(--r-sm);
+  padding: 12px 14px; border-left: 3px solid var(--accent);
+  margin-bottom: 6px;
+}
+.hl-n  { font-size: 0.88rem; font-weight: 600; }
+.hl-m  { font-size: 0.74rem; color: var(--muted); margin-top: 3px; }
+.hl-row {
+  display: flex; gap: 16px; margin-top: 8px; flex-wrap: wrap;
+}
+.hl-stat { display: flex; flex-direction: column; }
+.hl-sl { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+.hl-sv { font-size: 0.88rem; font-weight: 700; margin-top: 1px; }
+.h-sum {
+  background: rgba(0,0,0,.2); border-radius: var(--r-sm);
+  padding: 12px; margin-bottom: 12px;
+  display: flex; gap: 20px; flex-wrap: wrap;
+}
+.h-ss  { display: flex; flex-direction: column; gap: 2px; }
+.h-sl  { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; }
+.h-sv  { font-size: 0.96rem; font-weight: 700; }
+
+/* utility colours */
+.green  { color: var(--green); }
+.red    { color: var(--red); }
+.orange { color: var(--orange); }
+.muted  { color: var(--muted); }
+
+/* ═══════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════ */
+@media (max-width: 900px), (pointer: coarse) {
+  body { display: block; overflow: hidden; }
+  .sb {
+    position: fixed; top: 0; left: -310px; bottom: 0;
+    width: 300px; height: 100%;
+    z-index: 300;
+    transition: left .28s cubic-bezier(.4,0,.2,1);
+  }
+  .sb.open { left: 0; box-shadow: 8px 0 32px rgba(0,0,0,.7); }
+  .burger { display: flex; }
+  .main { height: 100dvh; overflow-y: auto; padding: 14px; padding-top: 64px; }
+  .cgrid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  /* summary stats wrap into a tidy grid — never scroll sideways */
+  .sbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+          gap: 1px; background: var(--bdr); padding: 0; overflow: hidden; }
+  .si { min-width: 0; background: var(--card); padding: 9px 12px; border: none; }
+  .si:first-child { padding-left: 12px; }
+}
+
+@media (max-width: 520px) {
+  html, body { overflow-x: hidden; max-width: 100%; }
+  html { font-size: 14px; }
+  .main { padding: 10px; padding-top: 60px; }
+  .mhdr h1 { font-size: 1.1rem; }
+  .mhdr { gap: 6px; }
+  .hbtns { gap: 6px; }
+  .hbtns button { padding: 7px 9px; font-size: .8rem; }
+  #sync-status { font-size: .66rem !important; padding: 4px 7px !important; }
+  .cgrid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .hi { padding: 11px 10px; }
+  .hi-a { font-size: 0.88rem; }
+  .mbg { padding: 0; align-items: flex-end; }
+  .mbox { width: 100%; max-width: 100%; border-radius: var(--r-md) var(--r-md) 0 0; max-height: 92dvh; overflow-y: auto; padding: 18px 16px; }
+  #sankey_chart { overflow-x: auto; }
+  .sk-hdr { flex-direction: column; align-items: stretch; gap: 10px; }
+  .sk-m   { justify-content: space-around; }
+  select.vsel { width: 100%; }
+  .hflt { flex-direction: column; }
+  .hflt select, .hflt input[type="text"] { min-width: unset; }
+  .mbox .r2 { flex-wrap: wrap; }
+  .mbox .r2 > * { flex: 1 1 calc(50% - 4px); min-width: 120px; }
+}
+@media (max-width: 380px) {
+  .cgrid { grid-template-columns: 1fr; }
+}
+
+/* ═══════════════════════════════════════
+   LIGHT THEME
+═══════════════════════════════════════ */
+body.light {
+  --bg:    #f3f5f8;
+  --sb:    #ffffff;
+  --card:  #ffffff;
+  --inp:   #ffffff;
+  --text:  #1f2933;
+  --muted: #5b6770;
+  --bdr:   #d7dee5;
+}
+body.light .mhdr h1, body.light #m-disp, body.light .sechdr h3,
+body.light .sb h2, body.light .mbox h2, body.light .mbox h3,
+body.light .tpl-hdr span { color: #1f2933; }
+body.light input, body.light select, body.light textarea { color: var(--text) !important; }
+body.light .clock { background: rgba(0,0,0,.05); }
+body.light #sync-status { background: #e7ebef; }
+body.light .mnav button { background: #e7ebef; }
+body.light .h-sum, body.light .cc-pre, body.light .card .csub { background: transparent; }
+body.light .main::-webkit-scrollbar-thumb,
+body.light .sb::-webkit-scrollbar-thumb { background: #c2ccd6; }
+body.light .hi, body.light .rec-it, body.light .cc-card { background: #fbfcfd; }
+</style>
+</head>
+<body>
+
+<button class="burger" id="burger-btn" onclick="toggleSB()" aria-label="Open menu">☰</button>
+<div class="overlay" id="overlay" onclick="toggleSB()"></div>
+
+<div class="sb" id="sidebar">
+  <div class="clock" id="live-clock">00:00:00 2026.01.01</div>
+  <h2 id="form-title">Transaction Input</h2>
+
+  <div class="fg">
+    <label>Type / Category</label>
+    <select id="type" onchange="handleTypeChange()">
+      <option value="Salary/Bonus">💴 Salary / Bonus (Income)</option>
+      <option value="Extra Allowance">➕ Extra Allowance (Income)</option>
+      <option value="Credit Card">💳 Credit Card Spending</option>
+      <option value="Daily">🛒 Daily Spending</option>
+      <option value="Utility">💡 Utilities</option>
+      <option value="Rent">🏠 Rent</option>
+      <option value="Subscription">📱 Subscription</option>
+      <option value="Extra Purchase">🛍 Extra Purchase</option>
+      <option value="Investment">📈 Investment (NISA/Stock/Euro)</option>
+      <option value="Current Cash Setup">🏦 Initial Cash Entry</option>
+      <option value="Existing Debt Setup">💳 Existing CC Debt (Setup)</option>
+    </select>
+  </div>
+
+  <div class="cc-box" id="cc-box">
+    <label>Credit Card</label>
+    <select id="cc-type" onchange="updateCCPre()">
+      <option value="PayPay">PayPay (27th Payment)</option>
+      <option value="Amazon">Amazon Card (10th Payment)</option>
+      <option value="Joyo">Joyo Card (10th Payment)</option>
+    </select>
+    <div class="cc-pre" id="cc-pre"></div>
+  </div>
+
+  <div class="fg">
+    <label>Label / Description</label>
+    <input type="text" id="label" placeholder="e.g. June Salary, iPhone…">
+  </div>
+
+  <div class="fg">
+    <label>Amount & Currency</label>
+    <div class="r2">
+      <input type="number" id="amount" step="any" placeholder="Amount" oninput="calcEur()" style="flex:2;">
+      <select id="currency" onchange="toggleEur()" style="flex:1;">
+        <option value="JPY">¥ JPY</option>
+        <option value="EUR">€ EUR</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="eur-box" id="eur-box">
+    <label>Purchase Rate (¥ per €1)</label>
+    <input type="number" id="pur-rate" step="0.01" placeholder="185.9" oninput="calcEur()">
+    <div class="eur-calc" id="eur-calc">Total Paid: ¥0</div>
+  </div>
+
+  <div class="fg">
+    <label>Date <span class="ftag" id="ftag">📅 Future Entry</span></label>
+    <input type="date" id="date" onchange="onDateChange()">
+  </div>
+
+  <button class="bf bp" onclick="addEntry()" id="sub-btn">💾 Save Entry</button>
+  <button class="bf bcan" onclick="cancelEdit()" id="can-btn" style="margin-top:5px;display:none;">✖ Cancel Edit</button>
+
+  <div>
+    <div class="tpl-hdr">
+      <span>⚡ Quick Fill</span>
+      <button class="bsm bg" onclick="manageDefaults()">+ Edit</button>
+    </div>
+    <div class="tpl-grid" id="tpl-grid"></div>
+  </div>
+
+  <div class="cfg-box">
+    <div class="fg" style="margin-bottom:7px;">
+      <label>EUR → JPY Rate</label>
+      <div class="cfg-row">
+        <input type="number" id="eur-r-inp" step="0.1" onchange="updateRate(this.value)" style="padding:5px;">
+        <button class="bgrn bsm" id="live-r-btn" onclick="fetchLiveRate()">🔄 Live</button>
+      </div>
+    </div>
+    <div>
+      <label>Expected Monthly Income (¥)</label>
+      <input type="number" id="exp-inc-inp" step="1" onchange="updateExpInc(this.value)" style="padding:5px;margin-top:3px;">
+    </div>
+  </div>
+
+  <button class="bf bpur" onclick="openRecModal()" style="padding:10px;">📅 Recurring Payments</button>
+  <button class="bf bteal" onclick="openHoldingsModal()" style="padding:10px;">📈 Investment Holdings</button>
+  <button class="bf bred" onclick="clearData()" style="padding:10px;">🗑 Wipe All Data</button>
+</div>
+
+<div class="main">
+  <div class="mhdr">
+    <h1>💴 Financial Workspace</h1>
+    <div class="hbtns">
+      <span id="sync-status" onclick="pushAll()" title="Tap to push everything to the cloud now" style="font-size:.72rem;padding:4px 9px;border-radius:20px;cursor:pointer;background:#2a2f3a;color:var(--muted);white-space:nowrap;align-self:center;">☁️ —</span>
+      <button class="bgrn" id="sync-btn" onclick="syncCloud()">☁️ Sync</button>
+      <button class="bpur" onclick="toggleTheme()" id="theme-btn" title="Toggle light / dark">🌙</button>
+      <button class="bpur" onclick="openCloud()">⚙️ Cloud</button>
+      <button class="bpur" onclick="openReports()">📊 Reports</button>
+    </div>
+  </div>
+
+  <div class="mnav">
+    <button onclick="navM(-1)">◀</button>
+    <div class="mnav-c">
+      <span id="m-disp">May 2026</span>
+      <span class="m-tag" id="m-tag">This Month</span>
+    </div>
+    <button onclick="navM(1)">▶</button>
+    <button id="now-btn" onclick="goNow()" class="bsm bg" style="display:none;">Now</button>
+  </div>
+
+  <div class="sbar">
+    <div class="si"><div class="si-l">Income</div><div class="si-v green" id="s-inc">¥0</div></div>
+    <div class="si"><div class="si-l">Total Spent</div><div class="si-v red" id="s-exp">¥0</div>
+      <div id="s-exp-brk" style="font-size:.61rem;color:var(--muted);line-height:1.55;margin-top:3px;"></div>
+    </div>
+    <div class="si"><div class="si-l">Net Profit</div><div class="si-v" id="s-prf">¥0</div></div>
+    <div class="si"><div class="si-l">CC 10th Bills</div><div class="si-v orange" id="s-cc10">¥0</div></div>
+    <div class="si"><div class="si-l">CC 27th Bills</div><div class="si-v orange" id="s-cc27">¥0</div></div>
+  </div>
+  <div id="mom-cmp" style="font-size:.72rem;color:var(--muted);margin:-6px 0 14px;padding:0 4px;"></div>
+
+  <div class="cgrid">
+    <div class="card">
+      <div class="clbl">Monthly Net Flow</div>
+      <div class="cval" id="c-nf">¥0</div>
+      <div class="csub" id="c-nf-s" style="font-size:.7rem;"></div>
+    </div>
+    <div class="card">
+      <div class="clbl">10th Bill Debt — Amazon / Joyo</div>
+      <div class="cval red" id="c-cc10">¥0</div>
+      <div class="cc-brk" id="cc10-brk"></div>
+    </div>
+    <div class="card">
+      <div class="clbl">27th Bill Debt — PayPay</div>
+      <div class="cval red" id="c-cc27">¥0</div>
+      <div class="cc-brk" id="cc27-brk"></div>
+    </div>
+    <div class="card">
+      <div class="clbl">Portfolio (All-Time)</div>
+      <div class="csub" style="line-height:1.85;">
+        Liquid Cash: <strong id="w-cash">¥0</strong><br>
+        NISA: <strong id="w-nisa">¥0</strong><br>
+        Stocks: <strong id="w-stk">¥0</strong><br>
+        Euro: <strong id="w-eur">0 €</strong>
+      </div>
+      <div class="cdet" id="w-eur-det"></div>
+      <div class="cdet" id="w-holdings-sum" style="display:none;"></div>
+      <div style="border-top:1px solid var(--bdr);margin-top:8px;padding-top:7px;font-size:.95rem;">
+        Net Worth: <strong id="w-net" style="color:var(--green);">¥0</strong>
+      </div>
+      <button class="bsm" onclick="openHoldingsModal()" style="background:#16a085;width:100%;margin-top:7px;">📈 Holdings</button>
+    </div>
+    <div class="card">
+      <div class="clbl">Free Spending Leeway</div>
+      <div class="cval" id="c-lwy">¥0</div>
+      <div class="csub" id="c-lwy-s" style="font-size:.7rem;"></div>
+    </div>
+    <div class="card">
+      <div class="clbl">Future Cash Forecast</div>
+      <div class="csub" style="line-height:2.0;font-size:.76rem;">
+        Actual Bank Now:&nbsp;<strong id="f-bank">¥0</strong><br>
+        + Expected Salary:&nbsp;<strong id="f-sal" class="green">¥0</strong><br>
+        − Pending CC Bills:&nbsp;<strong id="f-cc" class="red">¥0</strong><br>
+        − Upcoming Recurring:&nbsp;<strong id="f-rec" class="orange">¥0</strong><br>
+        + Future Income (logged):&nbsp;<strong id="f-fi" class="green">¥0</strong><br>
+        − Future Costs (logged):&nbsp;<strong id="f-fo" class="red">¥0</strong><br>
+        <div style="border-top:1px dashed var(--bdr);padding-top:4px;margin-top:4px;">
+          Projected: <strong id="f-proj" style="font-size:1.1rem;">¥0</strong>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="clbl">🎯 NISA This Year <span id="nisa-yr" class="muted" style="font-size:.7rem;"></span></div>
+      <div class="cval" id="nisa-val" style="font-size:1.15rem;">¥0</div>
+      <div style="background:rgba(0,0,0,.18);border-radius:6px;height:9px;margin:7px 0 5px;overflow:hidden;">
+        <div id="nisa-bar" style="height:100%;width:0;background:var(--green);transition:width .3s;"></div>
+      </div>
+      <div class="csub" id="nisa-sub" style="font-size:.7rem;"></div>
+      <div style="font-size:.62rem;color:var(--muted);margin-top:3px;cursor:pointer;" onclick="setNisaCap()">⚙️ annual cap — tap to change</div>
+    </div>
+    <div class="card">
+      <div class="clbl">📆 CC Bill Forecast</div>
+      <div class="csub" id="cc-fc" style="font-size:.78rem;line-height:1.6;">—</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sechdr">
+      <h3>📅 Upcoming Recurring Payments</h3>
+      <button class="bsm bpur" onclick="openRecModal()">+ Manage</button>
+    </div>
+    <div class="rec-list" id="up-list">
+      <div class="muted" style="font-size:.82rem;">No recurring items. Click Manage to add them.</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sechdr">
+      <h3>📈 Live Investments</h3>
+      <div style="display:flex;gap:6px;">
+        <button class="bsm bteal" id="inv-refresh" onclick="refreshTracked()">🔄 Refresh Prices</button>
+        <button class="bsm bg" onclick="openInvCfg()">⚙️ Tickers</button>
+      </div>
+    </div>
+    <div id="inv-list"></div>
+  </div>
+
+  <div class="sk-sec">
+    <div class="sk-hdr">
+      <select id="sk-mode" class="vsel" onchange="renderDashboard()">
+        <option value="month">📅 Monthly Cash Flow (billing-date view)</option>
+        <option value="purchase">🛒 Monthly by Purchase Date</option>
+        <option value="debt-10">💳 Pending 10th Cycle — Amazon/Joyo</option>
+        <option value="debt-27">💳 Pending 27th Cycle — PayPay</option>
+        <option value="all">🌐 All-Time Global Flow</option>
+      </select>
+      <div class="sk-m">
+        <div class="met"><span class="met-l">Net</span><span class="met-v" id="sk-net">¥0</span></div>
+        <div class="met"><span class="met-l">CC Ratio</span><span class="met-v" id="sk-rat">—</span></div>
+      </div>
+    </div>
+    <div id="sk-empty" style="text-align:center;padding:40px;color:var(--muted);font-size:.85rem;display:none;">No transactions found for this view</div>
+    <div id="sankey_chart" style="width:100%;"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sechdr"><h3>📋 Transaction Records</h3></div>
+    <div class="hflt">
+      <select id="hf-t" onchange="renderHist()">
+        <option value="">All Types</option>
+        <option value="Salary/Bonus">Salary/Bonus</option>
+        <option value="Extra Allowance">Extra Allowance</option>
+        <option value="Credit Card">Credit Card</option>
+        <option value="Daily">Daily</option>
+        <option value="Utility">Utility</option>
+        <option value="Rent">Rent</option>
+        <option value="Subscription">Subscription</option>
+        <option value="Extra Purchase">Extra Purchase</option>
+        <option value="Investment">Investment</option>
+      </select>
+      <input type="text" id="hf-s" placeholder="🔍 Search…" oninput="renderHist()">
+      <label><input type="checkbox" id="hf-m" onchange="renderHist()"> Month only</label>
+    </div>
+    <ul class="hul" id="h-list"></ul>
+    <div style="text-align:center;margin-top:7px;">
+      <button id="more-btn" class="bsm bg" onclick="showMore()" style="display:none;">Show More</button>
+    </div>
+  </div>
+</div>
+
+<div class="mbg" id="cloud-modal">
+  <div class="mbox">
+    <button class="mcls" onclick="closeM('cloud-modal')">✖</button>
+    <h2>⚙️ Cloud Connection</h2>
+    <p style="font-size:.78rem;color:var(--muted);margin:4px 0 10px;">
+      Paste the <strong>/exec</strong> URL of your Google Apps Script Web App. After changing the
+      script code you must <strong>Deploy → New deployment</strong> (or Manage deployments → Edit → Version: New)
+      and set access to <strong>Anyone</strong>. Then Save and Test below.
+    </p>
+    <input id="cloud-url-inp" placeholder="https://script.google.com/macros/s/…/exec" style="width:100%;font-size:.8rem;">
+    <label style="font-size:.75rem;color:var(--muted);display:block;margin-top:8px;">Access token <span style="font-size:.68rem;">(required only if you set SECRET in the script — needed for public hosting)</span></label>
+    <input id="cloud-token-inp" placeholder="leave blank for private/local use" style="width:100%;font-size:.8rem;">
+    <div class="exp-row" style="margin-top:10px;gap:8px;">
+      <button class="bp" onclick="saveCloudUrl()" style="flex:1;">💾 Save URL</button>
+      <button class="bteal" onclick="testConnection()" style="flex:1;">🔌 Test Connection</button>
+    </div>
+    <div id="cloud-test-out" style="font-size:.78rem;margin-top:10px;line-height:1.5;"></div>
+    <div class="hr"></div>
+    <button class="bgrn" onclick="pushAll()" style="width:100%;padding:10px;">⬆️ Push EVERYTHING to Cloud now</button>
+    <div class="hr"></div>
+    <h3 style="margin-bottom:6px;">↩ Restore from a backup</h3>
+    <p style="font-size:.72rem;color:var(--muted);margin-bottom:6px;">The cloud auto-saves a dated copy of your ledger (last 7 kept). Pick one to roll your transactions back to that day.</p>
+    <div class="exp-row" style="gap:8px;">
+      <select id="bak-sel" style="flex:1;background:var(--inp);color:#fff;border:1px solid var(--bdr);border-radius:4px;padding:6px;"><option value="">— load list —</option></select>
+      <button class="bg" onclick="loadBackups()">🔄</button>
+      <button class="bred" onclick="restoreCloudBackup()">Restore</button>
+    </div>
+    <div id="bak-out" style="font-size:.75rem;margin-top:6px;"></div>
+    <div class="hr"></div>
+    <p style="font-size:.72rem;color:var(--muted);margin-top:8px;">Use this after big edits, or to seed a freshly-created spreadsheet. On a <strong>new device</strong>, press <strong>☁️ Sync</strong> first to pull, before adding anything.</p>
+  </div>
+</div>
+
+<div class="mbg" id="reports-modal">
+  <div class="mbox">
+    <button class="mcls" onclick="closeM('reports-modal')">✖</button>
+    <h2>📊 Reports & Backup</h2>
+    <h3>📈 Net Worth Trend</h3>
+    <div id="nw-chart" style="margin-bottom:8px;"></div>
+    <div class="exp-row"><button onclick="takeSnapshotNow()" style="background:var(--accent);">📸 Snapshot net worth now</button></div>
+    <div class="hr"></div>
+    <h3>Export CSV</h3>
+    <div class="exp-row"><button onclick="exportCSV('full')" style="background:var(--accent);">Export Full Ledger</button></div>
+    <div class="exp-row">
+      <select id="exp-yr" style="background:var(--inp);color:#fff;border:1px solid var(--bdr);border-radius:4px;padding:6px;"></select>
+      <button onclick="exportCSV('year')" style="background:var(--accent);">Export Year</button>
+    </div>
+    <div class="exp-row">
+      <input type="month" id="exp-mo" style="background:var(--inp);color:#fff;border:1px solid var(--bdr);border-radius:4px;padding:6px;">
+      <button onclick="exportCSV('month')" style="background:var(--accent);">Export Month</button>
+    </div>
+    <div class="hr"></div>
+    <h3>Backup & Restore</h3>
+    <div style="display:flex;flex-direction:column;gap:7px;">
+      <button onclick="dlBackup()" style="background:#34495e;">⬇️ Download Backup (.json)</button>
+      <input type="file" id="imp-file" accept=".json" onchange="restoreBackup(event)" style="display:none;">
+      <button onclick="document.getElementById('imp-file').click()" style="background:var(--orange);">⬆️ Restore from Backup</button>
+    </div>
+  </div>
+</div>
+
+<div class="mbg" id="rec-modal">
+  <div class="mbox">
+    <button class="mcls" onclick="closeM('rec-modal')">✖</button>
+    <h2>📅 Recurring Payments Manager</h2>
+    <p style="font-size:.78rem;color:var(--muted);margin:5px 0 12px;">Set up regular payments. Log the actual transaction when you pay.</p>
+    <input type="hidden" id="re-id" value="">
+    <div class="r2" style="gap:7px;margin-bottom:7px;">
+      <div style="flex:2;"><label>Name</label><input type="text" id="re-nm" placeholder="Spotify, Rent, NISA…"></div>
+      <div style="flex:1;"><label>Category</label>
+        <select id="re-cat">
+          <option value="Subscription">Subscription</option>
+          <option value="Rent">Rent</option>
+          <option value="Utility">Utility</option>
+          <option value="Investment">Investment</option>
+          <option value="Daily">Daily/Food</option>
+          <option value="Extra Purchase">Extra</option>
+        </select>
+      </div>
+    </div>
+    <div class="r2" style="gap:7px;margin-bottom:7px;">
+      <div style="flex:2;"><label>Base Amount</label><input type="number" id="re-amt" step="any" placeholder="1080"></div>
+      <div style="flex:1;"><label>Currency</label>
+        <select id="re-cur"><option value="JPY">¥ JPY</option><option value="EUR">€ EUR</option></select>
+      </div>
+    </div>
+    <div class="fg">
+      <label>Payment Method</label>
+      <select id="re-pay">
+        <option value="Cash">💴 Cash / Bank (immediate)</option>
+        <option value="PayPay">💳 PayPay Card (27th bill)</option>
+        <option value="Amazon">💳 Amazon Card (10th bill)</option>
+        <option value="Joyo">💳 Joyo Card (10th bill)</option>
+      </select>
+      <div style="font-size:.69rem;color:var(--muted);margin-top:2px;">Card-paid items (e.g. Spotify, Nikkei News) flow into that card's billing cycle instead of immediate cash.</div>
+    </div>
+    <div class="fg">
+      <label>Recurrence Period</label>
+      <select id="re-per" onchange="onRecPer()">
+        <option value="monthly">Monthly</option>
+        <option value="biannual">Every 6 Months</option>
+        <option value="yearly">Yearly</option>
+        <option value="2yearly">Every 2 Years</option>
+        <option value="5yearly">Every 5 Years</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label id="re-dl">First Payment Date (day repeats monthly)</label>
+      <input type="date" id="re-sd">
+      <div id="re-mhint" style="font-size:.69rem;color:var(--muted);margin-top:2px;">The day of this date recurs every month.</div>
+    </div>
+    <div class="fg">
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+        <input type="checkbox" id="re-adj" style="width:auto;">
+        Shift to previous business day if it falls on a weekend
+      </label>
+      <div style="font-size:.69rem;color:var(--muted);margin-top:2px;">e.g. the 25th → 24th/23rd. Useful for NISA / Mebuki buys. (National holidays aren't auto-detected.)</div>
+    </div>
+    <div class="fg">
+      <label>Month Overrides — optional (e.g. 6:12000,12:12000 → June & Dec ¥12,000)</label>
+      <input type="text" id="re-ovr" placeholder="month:amount,month:amount">
+    </div>
+    <div class="fg">
+      <label>Notes (optional)</label>
+      <input type="text" id="re-nt" placeholder="e.g. auto-renew, check before billing…">
+    </div>
+    <div class="r2" style="gap:7px;">
+      <button onclick="saveRec()" style="background:var(--accent);flex:1;padding:8px;">💾 Save</button>
+      <button id="re-can-btn" onclick="cancelRecEdit()" style="background:#7f8c8d;display:none;flex:0.5;padding:8px;">Cancel</button>
+    </div>
+    <div class="hr"></div>
+    <h3>Saved Items</h3>
+    <div class="rm-list" id="rm-list"><div class="muted" style="font-size:.82rem;">No items yet.</div></div>
+  </div>
+</div>
+
+<div class="mbg" id="hold-modal">
+  <div class="mbox" style="width:560px;">
+    <button class="mcls" onclick="closeM('hold-modal')">✖</button>
+    <h2>📈 Investment Holdings Manager</h2>
+    <p style="font-size:.78rem;color:var(--muted);margin:5px 0 12px;">Track market value of your NISA/stock positions. Prices can be fetched automatically for exchange-listed tickers (e.g. 2558.T).</p>
+    <input type="hidden" id="h-id" value="">
+    <div class="r2" style="gap:7px;margin-bottom:7px;">
+      <div style="flex:3;"><label>Investment Name</label><input type="text" id="h-nm" placeholder="eMAXIS Slim S&P500"></div>
+      <div style="flex:2;"><label>Account</label>
+        <select id="h-acc">
+          <option value="NISA積立">NISA (積立投資枠)</option>
+          <option value="NISA成長">NISA (成長投資枠)</option>
+          <option value="特定">特定口座 (Tokutei)</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="r2" style="gap:7px;margin-bottom:7px;">
+      <div><label>Units / Shares</label><input type="number" id="h-un" step="any" placeholder="100.00"></div>
+      <div><label>Avg Buy Price (¥)</label><input type="number" id="h-avg" step="any" placeholder="15000"></div>
+      <div><label>Current Price (¥)</label><input type="number" id="h-cur" step="any" placeholder="16500"></div>
+    </div>
+    <div class="r2" style="gap:7px;margin-bottom:10px;">
+      <div style="flex:2;"><label>Ticker for Auto-Fetch (optional)</label><input type="text" id="h-tick" placeholder="2558.T / SPY / 1321.T"></div>
+      <div style="flex:1;display:flex;flex-direction:column;">
+        <label>&nbsp;</label>
+        <button onclick="fetchHoldPrice()" style="background:var(--accent);padding:7px;font-size:.8rem;" id="h-fetch-btn">🔄 Fetch Price</button>
+      </div>
+    </div>
+    <div class="r2" style="gap:7px;">
+      <button onclick="saveHolding()" style="background:var(--accent);flex:1;padding:8px;">💾 Save</button>
+      <button id="h-can-btn" onclick="cancelHoldEdit()" style="background:#7f8c8d;display:none;flex:0.5;padding:8px;">Cancel</button>
+    </div>
+    <div class="hr"></div>
+    <div id="h-sum" class="h-sum" style="display:none;"></div>
+    <div id="hold-list"><div class="muted" style="font-size:.82rem;">No holdings yet. Add above.</div></div>
+  </div>
+</div>
+
+<div class="mbg" id="inv-modal">
+  <div class="mbox">
+    <button class="mcls" onclick="closeM('inv-modal')">✖</button>
+    <h2>⚙️ Tracked Investment Tickers</h2>
+    <p style="font-size:.78rem;color:var(--muted);margin:5px 0 12px;">
+      These power the <strong>Live Investments</strong> panel and fill in your units automatically.
+      <strong>Label match</strong> = text that appears in the Label of the Investment entries you log
+      (e.g. type "s&amp;p" so a purchase labelled "S&amp;P500 NISA" is matched). <strong>Ticker</strong> =
+      Yahoo Finance symbol — Tokyo-listed tickers end in <em>.T</em> and are priced in yen, which avoids
+      currency conversion (e.g. 2558.T = S&amp;P500 ETF, 1321.T = Nikkei 225 ETF, 7167.T = Mebuki FG).
+    </p>
+    <div class="exp-row" style="gap:6px;font-size:.7rem;color:var(--muted);padding:0 2px;">
+      <div style="flex:2;">Name</div><div style="flex:1.5;">Ticker</div><div style="flex:1.5;">Label match</div><div style="width:34px;"></div>
+    </div>
+    <div id="inv-cfg-list"></div>
+    <button class="bsm bp" onclick="addTracked()" style="margin-top:10px;">+ Add Instrument</button>
+    <div class="hr"></div>
+    <p style="font-size:.72rem;color:var(--muted);">To log a buy: pick <strong>📈 Investment</strong>, put the matching word in the Label, enter the yen amount, Save. The app grabs that day's price and works out your units. Press <strong>🔄 Refresh Prices</strong> anytime to update current values.</p>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════
+const DEFAULT_CLOUD_URL = "https://script.google.com/macros/s/AKfycbyE2H0IvtXEeH-1DizEhG5Mr9cX21kGbmbrem7FCIgHkzC10hCz2zz-HVGx-4hOkoPC/exec";
+let CLOUD_URL = localStorage.getItem('financeTrackerCloudUrl') || DEFAULT_CLOUD_URL;
+let cloudToken = localStorage.getItem('financeTrackerToken') || '';
+// ═══════════════════════════════════════════════
+// INIT 
+// ═══════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', renderDashboard);
+window.addEventListener('resize', () => { clearTimeout(window._rt); window._rt = setTimeout(renderDashboard, 250); });
+
+// ═══════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════
+let entries  = JSON.parse(localStorage.getItem('financeTrackerData'))      || [];
+let recItems = JSON.parse(localStorage.getItem('financeTrackerRecurring')) || [];
+let holdings = JSON.parse(localStorage.getItem('financeTrackerHoldings'))  || [];
+let dflts    = JSON.parse(localStorage.getItem('financeTrackerDefaults'))  || {
+  "Rent":       {type:"Rent",       label:"Rent",           amount:40000, currency:"JPY"},
+  "Gas":        {type:"Utility",    label:"Gas",            amount:5500,  currency:"JPY"},
+  "Electricity":{type:"Utility",    label:"Electricity",    amount:4000,  currency:"JPY"},
+  "Internet":   {type:"Utility",    label:"Internet",       amount:4733,  currency:"JPY"},
+  "Food":       {type:"Daily",      label:"Food",           amount:50000, currency:"JPY"},
+  "Euro Sav.":  {type:"Investment", label:"Euro Transfer",  amount:84,    currency:"EUR"}
+};
+let eurRate  = parseFloat(localStorage.getItem('financeTrackerEurRate'))   || 185.9;
+let expInc   = parseFloat(localStorage.getItem('financeTrackerExpInc'))    || 233847;
+// Auto-tracked investments (yen-denominated Tokyo proxies so there's no FX math).
+// "keyword" = text that appears in the Label of your logged Investment entries.
+let trackedInv = JSON.parse(localStorage.getItem('financeTrackerTracked')) || [
+  {id:1, name:'S&P 500',    ticker:'2558.T', keyword:'s&p',    price:null, prevClose:null, updated:null},
+  {id:2, name:'Nikkei 225', ticker:'1321.T', keyword:'nikkei', price:null, prevClose:null, updated:null},
+  {id:3, name:'Mebuki FG',  ticker:'7167.T', keyword:'mebuki', price:null, prevClose:null, updated:null}
+];
+// monthly net-worth history for the growth chart
+let snapshots = JSON.parse(localStorage.getItem('financeTrackerSnapshots')) || [];
+// cloud revision counter (for conflict-aware sync) + NISA annual cap + theme
+let cloudRev = parseInt(localStorage.getItem('financeTrackerRev')) || 0;
+let nisaCap  = parseInt(localStorage.getItem('financeTrackerNisaCap')) || 1200000;
+
+// ═══════════════════════════════════════════════
+// DATE NORMALIZATION  (bulletproofs against corrupted cloud values)
+//  Accepts: ISO "2026-05-22", JS Date.toString() incl. truncated tz
+//  ("Fri May 22 2026 00:00:00 GM" / "... GMT+0900 (Japan...)"),
+//  Date objects, and epoch numbers. Returns clean "YYYY-MM-DD" or null.
+// ═══════════════════════════════════════════════
+function localISO(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function toISO(v){
+  if(v===null||v===undefined||v==='')return null;
+  if(v instanceof Date)return isNaN(v)?null:localISO(v);
+  if(typeof v==='number'){const d=new Date(v);return isNaN(d)?null:localISO(d);}
+  const s=String(v).trim();
+  const m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);            // already ISO
+  if(m)return `${m[1]}-${m[2]}-${m[3]}`;
+  // strip "(Japan Standard Time)" and any "GMT…/GM…" tail, then parse as LOCAL
+  let cleaned=s.replace(/\s*\(.*\)\s*$/,'').replace(/\s+GMT?[+\-]?\d*.*$/i,'').trim();
+  let d=new Date(cleaned);
+  if(isNaN(d))d=new Date(s);
+  return isNaN(d)?null:localISO(d);
+}
+function normalizeEntries(){entries.forEach(e=>{if(e)e.date=toISO(e.date);});}
+normalizeEntries();
+localStorage.setItem('financeTrackerData',JSON.stringify(entries));
+
+// ═══════════════════════════════════════════════
+// VIEW STATE
+// ═══════════════════════════════════════════════
+const TODAY = new Date();
+let vY = TODAY.getFullYear(), vM = TODAY.getMonth();
+let editId=null, editRecId=null, editHoldId=null;
+let histLim=30;
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+document.getElementById('eur-r-inp').value  = eurRate;
+document.getElementById('exp-inc-inp').value = expInc;
+document.getElementById('date').valueAsDate  = new Date();
+buildTplUI();
+applyTheme(localStorage.getItem('financeTrackerTheme')||'dark');
+setSyncStatus(urlOk()?'idle':'error', urlOk()?'☁️ Ready':'⚠️ Set URL');
+// ── PWA: attach an installable manifest (best effort; full offline needs hosting) ──
+try{
+  const ICON="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%231a1e23'/%3E%3Ctext x='256' y='350' font-size='280' text-anchor='middle' fill='%232ecc71'%3E%C2%A5%3C/text%3E%3C/svg%3E";
+  const mf={name:'Money Tracker',short_name:'Money',display:'standalone',orientation:'portrait',
+    background_color:'#1a1e23',theme_color:'#1a1e23',start_url:'.',scope:'.',
+    icons:[{src:ICON,sizes:'512x512',type:'image/svg+xml',purpose:'any maskable'}]};
+  const url=URL.createObjectURL(new Blob([JSON.stringify(mf)],{type:'application/manifest+json'}));
+  const l=document.createElement('link');l.rel='manifest';l.href=url;document.head.appendChild(l);
+}catch(e){}
+
+// ═══════════════════════════════════════════════
+// CLOCK
+// ═══════════════════════════════════════════════
+const WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function tick(){
+  const n=new Date(),p=x=>String(x).padStart(2,'0');
+  document.getElementById('live-clock').innerText=`${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())} ${n.getFullYear()}.${p(n.getMonth()+1)}.${p(n.getDate())} ${WD[n.getDay()]}`;
+}
+setInterval(tick,1000);tick();
+
+// ═══════════════════════════════════════════════
+// MOBILE SIDEBAR TOGGLE
+// ═══════════════════════════════════════════════
+function toggleSB(){
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('show');
+}
+
+// ═══════════════════════════════════════════════
+// MONTH NAV
+// ═══════════════════════════════════════════════
+const MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function navM(d){vM+=d;if(vM>11){vM=0;vY++;}if(vM<0){vM=11;vY--;}histLim=30;renderDashboard();}
+function goNow(){vY=TODAY.getFullYear();vM=TODAY.getMonth();histLim=30;renderDashboard();}
+function isCurM(){return vY===TODAY.getFullYear()&&vM===TODAY.getMonth();}
+function isPastM(){return vY<TODAY.getFullYear()||(vY===TODAY.getFullYear()&&vM<TODAY.getMonth());}
+
+function updMNav(){
+  document.getElementById('m-disp').innerText=`${MN[vM]} ${vY}`;
+  const tag=document.getElementById('m-tag'),nb=document.getElementById('now-btn');
+  if(isCurM()){tag.innerText='This Month';tag.style.background='var(--accent)';tag.style.display='inline';nb.style.display='none';}
+  else if(isPastM()){tag.innerText='Past';tag.style.background='#555';tag.style.display='inline';nb.style.display='inline';}
+  else{tag.innerText='Future';tag.style.background='var(--purple)';tag.style.display='inline';nb.style.display='inline';}
+}
+
+// ═══════════════════════════════════════════════
+// FORM HANDLERS
+// ═══════════════════════════════════════════════
+function handleTypeChange(){
+  const t=document.getElementById('type').value;
+  document.getElementById('cc-box').style.display=(t==='Credit Card'||t==='Existing Debt Setup')?'block':'none';
+  toggleEur();updateCCPre();
+}
+function onDateChange(){
+  const eod=new Date();eod.setHours(23,59,59,999);
+  const sel=new Date(document.getElementById('date').value+'T00:00:00');
+  document.getElementById('ftag').style.display=sel>eod?'inline':'none';
+  updateCCPre();
+}
+function toggleEur(){
+  const cur=document.getElementById('currency').value,t=document.getElementById('type').value;
+  const show=cur==='EUR'&&t!=='Current Cash Setup';
+  document.getElementById('eur-box').style.display=show?'block':'none';
+  if(show&&!document.getElementById('pur-rate').value)document.getElementById('pur-rate').value=eurRate;
+  if(show)calcEur();
+}
+function calcEur(){
+  const a=parseFloat(document.getElementById('amount').value)||0,r=parseFloat(document.getElementById('pur-rate').value)||0;
+  document.getElementById('eur-calc').innerText=`Total Paid: ¥${(a*r).toLocaleString(undefined,{maximumFractionDigits:0})}`;
+}
+
+// ═══════════════════════════════════════════════
+// CC BILLING DATE
+// ═══════════════════════════════════════════════
+function adjDate(y,m,d){
+  const dt=new Date(y,m,d);
+  if(dt.getDay()===6)dt.setDate(dt.getDate()+2);
+  else if(dt.getDay()===0)dt.setDate(dt.getDate()+1);
+  return dt;
+}
+function fmt(d){return`${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;}
+
+function getBillDate(e){
+  if(!e.ccType||!e.date)return null;
+  const d=new Date(e.date+'T00:00:00');
+  if(e.ccType==='PayPay')return adjDate(d.getFullYear(),d.getMonth()+1,27);
+  const bm=d.getDate()<=15?d.getMonth()+1:d.getMonth()+2;
+  return adjDate(d.getFullYear(),bm,10);
+}
+
+function updateCCPre(){
+  const t=document.getElementById('type').value;
+  if(t!=='Credit Card'&&t!=='Existing Debt Setup')return;
+  const d=new Date(document.getElementById('date').value+'T00:00:00');if(isNaN(d))return;
+  const card=document.getElementById('cc-type').value;
+  if(card==='PayPay'){
+    const pd=adjDate(d.getFullYear(),d.getMonth()+1,27);
+    document.getElementById('cc-pre').innerText=`Bills: ${fmt(pd)} — deducted from current salary.`;
+  }else{
+    const bm=d.getDate()<=15?d.getMonth()+1:d.getMonth()+2;
+    const pd=adjDate(d.getFullYear(),bm,10);
+    document.getElementById('cc-pre').innerText=`Bills: ${fmt(pd)} — deducted from prev salary.`;
+  }
+}
+document.getElementById('date').addEventListener('change',updateCCPre);
+
+function calcBillCycle(dateStr,ccType){
+  if(!ccType)return'Immediate/Cash';
+  const d=new Date(dateStr+'T00:00:00');
+  let mIdx,day,y=d.getFullYear();
+  if(ccType==='PayPay'){mIdx=d.getMonth()+1;day=27;}
+  else{mIdx=d.getDate()<=15?d.getMonth()+1:d.getMonth()+2;day=10;}
+  if(mIdx>11){mIdx-=12;y++;}
+  return`${MS[mIdx]} ${day} Bill`;
+}
+
+// ═══════════════════════════════════════════════
+// ENTRY CRUD
+// ═══════════════════════════════════════════════
+async function addEntry(){
+  const type=document.getElementById('type').value;
+  const lbl=document.getElementById('label').value.trim();
+  const rawAmt=parseFloat(document.getElementById('amount').value);
+  const cur=document.getElementById('currency').value;
+  const date=document.getElementById('date').value;
+  const ccType=(type==='Credit Card'||type==='Existing Debt Setup')?document.getElementById('cc-type').value:null;
+  if(!lbl||isNaN(rawAmt)||!date){alert("Please fill Label, Amount, and Date.");return;}
+  const isInc=type==='Salary/Bonus'||type==='Extra Allowance';
+  const isAsset=type==='Current Cash Setup';
+  let amt=rawAmt;if(!isInc&&!isAsset)amt=-Math.abs(rawAmt);
+  const pRate=(cur==='EUR'&&!isAsset)?(parseFloat(document.getElementById('pur-rate').value)||eurRate):null;
+  const entry={id:editId||Date.now(),type,label:lbl,amount:amt,currency:cur,purchaseRate:pRate,date,ccType,billingCycle:calcBillCycle(date,ccType)};
+
+  // ── auto-capture price + units for a tracked investment (so you never type units) ──
+  if(type==='Investment'&&cur!=='EUR'){
+    const inst=matchTracked(lbl);
+    if(inst&&inst.ticker){
+      const sb=document.getElementById('sub-btn');const old=sb.innerText;sb.innerText='⏳ Pricing…';sb.disabled=true;
+      let px=null;
+      try{const r=await fetchTickerPrice(inst.ticker);px=r.price;inst.price=r.price;inst.prevClose=r.prevClose;inst.updated=new Date().toISOString().split('T')[0];}
+      catch{px=inst.price||null;}                       // fall back to last known price
+      if(px&&px>0){entry.unitPrice=px;entry.units=Math.abs(amt)/px;}
+      sb.disabled=false;sb.innerText=old;
+    }
+  }
+
+  if(editId){entries[entries.findIndex(e=>e.id===editId)]=entry;cancelEdit();}
+  else entries.push(entry);
+  saveRender();
+}
+function triggerEdit(id){
+  const e=entries.find(x=>x.id===id);if(!e)return;
+  editId=id;
+  document.getElementById('form-title').innerText='Modify Entry';
+  document.getElementById('sub-btn').innerText='💾 Update';
+  document.getElementById('can-btn').style.display='block';
+  document.getElementById('type').value=e.type;
+  document.getElementById('label').value=e.label;
+  document.getElementById('amount').value=Math.abs(e.amount);
+  document.getElementById('currency').value=e.currency;
+  document.getElementById('date').value=e.date;
+  if(e.ccType)document.getElementById('cc-type').value=e.ccType;
+  if(e.purchaseRate)document.getElementById('pur-rate').value=e.purchaseRate;
+  handleTypeChange();
+  const sb=document.getElementById('sidebar');sb.classList.add('open');
+  sb.scrollTo({top:0,behavior:'smooth'});
+}
+function cancelEdit(){
+  editId=null;
+  document.getElementById('form-title').innerText='Transaction Input';
+  document.getElementById('sub-btn').innerText='💾 Save Entry';
+  document.getElementById('can-btn').style.display='none';
+  document.getElementById('label').value='';
+  document.getElementById('amount').value='';
+  document.getElementById('date').valueAsDate=new Date();
+  document.getElementById('ftag').style.display='none';
+  handleTypeChange();
+}
+function delEntry(id){if(editId===id)cancelEdit();entries=entries.filter(e=>e.id!==id);saveRender();}
+function clearData(){if(confirm("Wipe ALL transaction history? This cannot be undone.")){entries=[];saveRender();}}
+
+// ═══════════════════════════════════════════════
+// SAVE / CLOUD
+// ═══════════════════════════════════════════════
+// ── persist EVERYTHING locally, and (debounced) push the full state to the cloud ──
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function setSyncStatus(state,msg){
+  const el=document.getElementById('sync-status');if(!el)return;
+  const map={saved:['✅ Saved','#1e3a2a','var(--green)'],saving:['⏳ Saving…','#2a2f3a','var(--muted)'],
+             error:['⚠️ Not synced','#3a261e','var(--red)'],idle:['☁️ —','#2a2f3a','var(--muted)']};
+  const [t,bg,fg]=map[state]||map.idle;
+  el.innerText=msg||t;el.style.background=bg;el.style.color=fg;
+}
+function persistLocal(){
+  localStorage.setItem('financeTrackerData',JSON.stringify(entries));
+  localStorage.setItem('financeTrackerRecurring',JSON.stringify(recItems));
+  localStorage.setItem('financeTrackerHoldings',JSON.stringify(holdings));
+  localStorage.setItem('financeTrackerDefaults',JSON.stringify(dflts));
+  localStorage.setItem('financeTrackerTracked',JSON.stringify(trackedInv));
+  localStorage.setItem('financeTrackerSnapshots',JSON.stringify(snapshots));
+  localStorage.setItem('financeTrackerEurRate',eurRate);
+  localStorage.setItem('financeTrackerExpInc',expInc);
+  localStorage.setItem('financeTrackerCloudUrl',CLOUD_URL);
+  localStorage.setItem('financeTrackerRev',cloudRev);
+  localStorage.setItem('financeTrackerNisaCap',nisaCap);
+  localStorage.setItem('financeTrackerToken',cloudToken);
+}
+function gurl(extra){return CLOUD_URL+(CLOUD_URL.indexOf('?')>=0?'&':'?')+'token='+encodeURIComponent(cloudToken)+(extra?'&'+extra:'');}
+function cloudPayload(force){
+  const prices={};entries.forEach(e=>{if(e.unitPrice)prices[String(e.id)]=e.unitPrice;});
+  return {action:'syncAll',entries,recurring:recItems,holdings,defaults:dflts,
+          tracked:trackedInv,snapshots,prices,eurRate,expInc,baseRev:cloudRev,force:!!force,token:cloudToken};
+}
+function urlOk(){return CLOUD_URL&&CLOUD_URL.startsWith('https://script.google.com');}
+// returns 'ok' on success, 'conflict' if cloud changed elsewhere, false on failure
+async function pushCloud(force){
+  if(!urlOk()){setSyncStatus('error','⚠️ No URL');return false;}
+  setSyncStatus('saving');
+  try{
+    const res=await fetch(CLOUD_URL,{method:'POST',body:JSON.stringify(cloudPayload(force)),headers:{'Content-Type':'text/plain;charset=utf-8'}});
+    const out=await res.json().catch(()=>({}));
+    if(out&&out.conflict){setSyncStatus('error','⚠️ Conflict — tap');return 'conflict';}
+    if(out&&out.error)throw new Error(out.error);
+    if(out&&out.rev!=null){cloudRev=out.rev;localStorage.setItem('financeTrackerRev',cloudRev);}
+    setSyncStatus('saved');return 'ok';
+  }catch(err){setSyncStatus('error');return false;}
+}
+let _cpT=null;
+function scheduleCloudPush(){clearTimeout(_cpT);setSyncStatus('saving');_cpT=setTimeout(()=>pushCloud(false),700);}
+function persist(){persistLocal();scheduleCloudPush();}
+
+async function saveRender(){
+  persistLocal();
+  renderDashboard();
+  scheduleCloudPush();
+}
+// explicit full upload with clear confirmation + conflict resolution
+async function pushAll(){
+  if(!urlOk()){alert("Set your Google Apps Script URL first (⚙️ Cloud).");openCloud();return;}
+  if(!entries.length&&!recItems.length){if(!confirm("Local data looks empty. Push anyway? This will overwrite the cloud with empty data."))return;}
+  persistLocal();
+  let r=await pushCloud(false);
+  if(r==='conflict'){
+    if(confirm("⚠️ The cloud was changed on another device since this one last synced.\n\nOK = overwrite the cloud with THIS device's data.\nCancel = pull the other device's version instead.")){
+      r=await pushCloud(true);
+    } else { await syncCloud(); return; }
+  }
+  alert(r==='ok'?"✅ Pushed everything to the cloud.":"❌ Push failed. Open ⚙️ Cloud → Test Connection to diagnose.");
+}
+async function syncCloud(){
+  if(!urlOk()){alert("Set your Google Apps Script URL first (⚙️ Cloud).");openCloud();return;}
+  const btn=document.getElementById('sync-btn');btn.innerText="⏳...";
+  try{
+    const res=await fetch(gurl());const data=await res.json();
+    if(data&&data.error==='unauthorized')throw new Error("Access token rejected. Check ⚙️ Cloud → Access token.");
+    if(data&&data.error)throw new Error(data.error);
+    const ents=Array.isArray(data)?data:(data.entries||[]);
+    const cleaned=ents.filter(e=>e.id).map(e=>{e.date=toISO(e.date);return e;});
+    // safety: don't silently wipe local data if the cloud came back empty
+    if(cleaned.length===0&&entries.length>0){
+      if(!confirm("The cloud returned no transactions, but you have local data. Pull anyway? (This replaces your local data with the empty cloud copy.)")){
+        btn.innerText="☁️ Sync";return;
+      }
+    }
+    entries=cleaned;
+    if(!Array.isArray(data)){
+      if(data.rev!=null){cloudRev=data.rev;localStorage.setItem('financeTrackerRev',cloudRev);}
+      const prices=data.prices||{};
+      entries.forEach(e=>{const p=prices[String(e.id)];if(p){e.unitPrice=p;if(e.type==='Investment'&&e.currency!=='EUR')e.units=Math.abs(e.amount)/p;}});
+      if(Array.isArray(data.recurring))recItems=data.recurring;
+      if(Array.isArray(data.holdings)) holdings=data.holdings;
+      if(Array.isArray(data.tracked))  trackedInv=data.tracked;
+      if(Array.isArray(data.snapshots))snapshots=data.snapshots;
+      if(data.defaults&&typeof data.defaults==='object'&&Object.keys(data.defaults).length)dflts=data.defaults;
+      if(data.eurRate!=null&&!isNaN(parseFloat(data.eurRate)))eurRate=parseFloat(data.eurRate);
+      if(data.expInc!=null&&!isNaN(parseFloat(data.expInc)))  expInc=parseFloat(data.expInc);
+    } else {
+      alert("⚠️ Connected, but your Apps Script is an OLD version (it only returns transactions, not recurring/holdings). Update the script to v2.6 and redeploy a NEW version, then Sync again.");
+    }
+    persistLocal();
+    document.getElementById('eur-r-inp').value=eurRate;
+    document.getElementById('exp-inc-inp').value=expInc;
+    buildTplUI();renderRMList();renderDashboard();setSyncStatus('saved');
+    btn.innerText="☁️ Sync";
+  }catch(err){btn.innerText="☁️ Sync";setSyncStatus('error');alert("Cloud sync failed: "+err.message+"\n\nOpen ⚙️ Cloud → Test Connection to check your URL/deployment.");}
+}
+// ── cloud settings modal ──
+function openCloud(){document.getElementById('cloud-url-inp').value=CLOUD_URL;document.getElementById('cloud-token-inp').value=cloudToken;document.getElementById('cloud-test-out').innerHTML='';document.getElementById('cloud-modal').style.display='flex';}
+function saveCloudUrl(){
+  const v=document.getElementById('cloud-url-inp').value.trim();
+  if(v&&!v.startsWith('https://script.google.com')){if(!confirm("That doesn't look like an Apps Script /exec URL. Save anyway?"))return;}
+  CLOUD_URL=v;cloudToken=document.getElementById('cloud-token-inp').value.trim();
+  localStorage.setItem('financeTrackerCloudUrl',CLOUD_URL);
+  localStorage.setItem('financeTrackerToken',cloudToken);
+  document.getElementById('cloud-test-out').innerHTML='<span style="color:var(--green);">Saved. Now press Test Connection.</span>';
+}
+async function testConnection(){
+  const out=document.getElementById('cloud-test-out');out.innerHTML='Testing…';
+  const url=document.getElementById('cloud-url-inp').value.trim();
+  const tok=document.getElementById('cloud-token-inp').value.trim();
+  if(!url){out.innerHTML='<span style="color:var(--red);">Enter a URL first.</span>';return;}
+  try{
+    const res=await fetch(url+(url.indexOf('?')>=0?'&':'?')+'token='+encodeURIComponent(tok));const data=await res.json();
+    if(data&&data.error==='unauthorized'){out.innerHTML='<span style="color:var(--red);">🔒 Reached the script, but the access token was rejected. Make sure the token here matches SECRET in the Apps Script.</span>';return;}
+    if(Array.isArray(data)){out.innerHTML='<span style="color:#e0a458;">Reached an OLD script (returns only transactions). Update to the latest .gs & redeploy a NEW version.</span>';return;}
+    const ver=data.version||'(no version — old script)';
+    const full=/^v(2\.(6|7|8|9)|3\.)/.test(ver)||parseFloat((ver.match(/[\d.]+/)||[0])[0])>=2.6;
+    out.innerHTML=`<span style="color:var(--green);">✅ Connected. Script ${esc(ver)}.</span><br>`+
+      `Cloud has: ${(data.entries||[]).length} transactions · ${(data.recurring||[]).length} recurring · ${(data.holdings||[]).length} holdings · ${(data.tracked||[]).length} tickers · ${(data.snapshots||[]).length} snapshots.`+
+      (full?'':'<br><span style="color:var(--red);">⚠️ This looks like an older script — update to the latest .gs and redeploy a NEW version.</span>');
+  }catch(err){out.innerHTML='<span style="color:var(--red);">❌ Could not reach it: '+esc(err.message)+'.<br>Check the URL, and that the deployment access is set to “Anyone”.</span>';}
+}
+async function loadBackups(){
+  const sel=document.getElementById('bak-sel'),out=document.getElementById('bak-out');
+  if(!urlOk()){out.innerHTML='<span style="color:var(--red);">Set the URL first.</span>';return;}
+  out.innerText='Loading…';
+  try{
+    const res=await fetch(gurl('list=backups'));const data=await res.json();
+    const baks=data.backups||[];
+    sel.innerHTML=baks.length?baks.map(b=>`<option value="${esc(b)}">${esc(b.replace('Bak_',''))}</option>`).join(''):'<option value="">(no backups yet)</option>';
+    out.innerHTML=baks.length?`<span style="color:var(--green);">${baks.length} backup(s) available.</span>`:'<span class="muted">No backups yet — they appear after your first push each day.</span>';
+  }catch(err){out.innerHTML='<span style="color:var(--red);">Failed to load backups.</span>';}
+}
+async function restoreCloudBackup(){
+  const sheet=document.getElementById('bak-sel').value,out=document.getElementById('bak-out');
+  if(!sheet){out.innerHTML='<span style="color:var(--red);">Pick a backup first (tap 🔄).</span>';return;}
+  if(!confirm(`Restore your ledger to "${sheet.replace('Bak_','')}"? This replaces the cloud's current transactions with that day's copy, then pulls it here.`))return;
+  out.innerText='Restoring…';
+  try{
+    const res=await fetch(CLOUD_URL,{method:'POST',body:JSON.stringify({action:'restoreBackup',sheet,token:cloudToken}),headers:{'Content-Type':'text/plain;charset=utf-8'}});
+    const r=await res.json();
+    if(r.error)throw new Error(r.error);
+    if(r.rev!=null){cloudRev=r.rev;localStorage.setItem('financeTrackerRev',cloudRev);}
+    out.innerHTML='<span style="color:var(--green);">Restored. Pulling…</span>';
+    await syncCloud();
+    out.innerHTML='<span style="color:var(--green);">✅ Ledger restored from '+esc(sheet.replace('Bak_',''))+'.</span>';
+  }catch(err){out.innerHTML='<span style="color:var(--red);">Restore failed: '+esc(err.message)+'</span>';}
+}
+function updateRate(v){eurRate=parseFloat(v)||185.9;persist();renderDashboard();}
+function applyTheme(t){
+  document.body.classList.toggle('light',t==='light');
+  const b=document.getElementById('theme-btn');if(b)b.innerText=t==='light'?'☀️':'🌙';
+  localStorage.setItem('financeTrackerTheme',t);
+}
+function toggleTheme(){applyTheme(document.body.classList.contains('light')?'dark':'light');}
+function setNisaCap(){
+  const v=prompt("Annual NISA contribution cap (¥). Tsumitate is ¥1,200,000; new-NISA total is ¥3,600,000.",nisaCap);
+  if(v===null)return;const n=parseInt(String(v).replace(/[^0-9]/g,''));
+  if(!isNaN(n)&&n>0){nisaCap=n;persistLocal();renderDashboard();}
+}function updateExpInc(v){expInc=parseFloat(v)||0;persist();renderDashboard();}
+async function fetchLiveRate(){
+  const btn=document.getElementById('live-r-btn');btn.innerText="⏳";
+  try{
+    const res=await fetch('https://api.exchangerate-api.com/v4/latest/EUR');const data=await res.json();
+    if(data?.rates?.JPY){document.getElementById('eur-r-inp').value=data.rates.JPY.toFixed(2);updateRate(data.rates.JPY.toFixed(2));btn.innerText="✅";setTimeout(()=>btn.innerText="🔄 Live",2000);}
+  }catch{btn.innerText="❌";setTimeout(()=>btn.innerText="🔄 Live",2000);}
+}
+
+// ═══════════════════════════════════════════════
+// RECURRING ENGINE
+// ═══════════════════════════════════════════════
+const PM={biannual:6,yearly:12,'2yearly':24,'5yearly':60};
+const PL={monthly:'Monthly',biannual:'Every 6mo',yearly:'Yearly','2yearly':'Every 2yr','5yearly':'Every 5yr'};
+
+function occInMonth(item,year,month){
+  if(!item.active||!item.startDate)return null;
+  const start=new Date(item.startDate+'T00:00:00');
+  const ms=new Date(year,month,1),me=new Date(year,month+1,0,23,59,59);
+  if(item.period==='monthly'){
+    if(ms<new Date(start.getFullYear(),start.getMonth(),1))return null;
+    let occ=new Date(year,month,Math.min(start.getDate(),me.getDate()));
+    return item.adjustBack?adjBack(occ):occ;
+  }
+  const pm=PM[item.period];if(!pm)return null;
+  let check=new Date(start);
+  while(check<ms)check=new Date(check.getFullYear(),check.getMonth()+pm,check.getDate());
+  if(check>me)return null;
+  return item.adjustBack?adjBack(check):check;
+}
+// Move a weekend date back to the previous Friday (for "pay on the 25th, or the
+// previous business day" investments). Public holidays aren't auto-detected —
+// edit the logged entry's date manually on the rare month the 25th is a holiday.
+function adjBack(d){const x=new Date(d);if(x.getDay()===0)x.setDate(x.getDate()-2);else if(x.getDay()===6)x.setDate(x.getDate()-1);return x;}
+
+function amtForMonth(item,month){
+  if(item.monthOverrides){const k=String(month+1);if(item.monthOverrides[k]!==undefined)return item.monthOverrides[k];}
+  return item.amount;
+}
+
+function getRecForMonth(year,month){
+  return recItems.map(item=>{const d=occInMonth(item,year,month);return d?{item,date:d,amount:amtForMonth(item,month)}:null;}).filter(Boolean).sort((a,b)=>a.date-b.date);
+}
+
+// ── FIXED: strict label matching only to stop the 1080 amount bug
+function isPaid(item,year,month){
+  return entries.some(e=>{
+    if(!e.date)return false;
+    const d=new Date(e.date+'T00:00:00');
+    if(d.getFullYear()!==year||d.getMonth()!==month||e.amount>=0)return false;
+    const lm=(e.label||'').toLowerCase().includes(item.name.toLowerCase())||item.name.toLowerCase().includes((e.label||'').toLowerCase());
+    return lm; 
+  });
+}
+
+function nextOcc(item){
+  for(let i=0;i<72;i++){
+    const m=(TODAY.getMonth()+i)%12,y=TODAY.getFullYear()+Math.floor((TODAY.getMonth()+i)/12);
+    const o=occInMonth(item,y,m);if(o&&o>=TODAY)return o;
+  }
+  return null;
+}
+
+// ── NEW: Auto Settle Engine & Manual Button function
+// Build a transaction from a recurring item, routed by its payment method.
+function recEntry(item,dateStr,amount){
+  const card=(item.payMethod&&item.payMethod!=='Cash')?item.payMethod:null;
+  return {
+    id: Date.now()+Math.floor(Math.random()*1000),
+    type: card?'Credit Card':(item.category||'Subscription'),
+    label: item.name,
+    amount: -Math.abs(amount),
+    currency: item.currency,
+    purchaseRate: item.currency==='EUR'?eurRate:null,
+    date: dateStr,
+    ccType: card,
+    billingCycle: card?calcBillCycle(dateStr,card):'Immediate/Cash'
+  };
+}
+function autoSettleRecurring(year, month) {
+  const today = new Date();
+  today.setHours(23,59,59,999);
+  let changed = false;
+
+  const recThisM = getRecForMonth(year, month);
+  recThisM.forEach(({item, date, amount}) => {
+    // If the due date has arrived or passed, and it isn't marked as paid
+    if (date <= today && !isPaid(item, year, month)) {
+      const dateStr = date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0');
+      entries.push(recEntry(item, dateStr, amount));
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    localStorage.setItem('financeTrackerData',JSON.stringify(entries));
+    // NOTE: no cloud POST here — that ran on every render/resize and spammed
+    // the script. Auto-settled rows are pushed on the next Save or manual Sync.
+  }
+  return changed;
+}
+
+window.manuallySettleRec = function(id, dateStr, amount) {
+  const item = recItems.find(r => r.id === id);
+  if(!item) return;
+  entries.push(recEntry(item, dateStr, amount));
+  saveRender();
+};
+
+// Reverse a settled recurring payment: remove the logged transaction(s) for that
+// item in the given month. Tries an exact name match first, then a fuzzy match.
+window.unsettleRec = function(id, year, month) {
+  const item = recItems.find(r => r.id === id);
+  if(!item) return;
+  const inMonthNeg = e => {
+    if(!e.date || e.amount >= 0) return false;
+    const d = new Date(e.date+'T00:00:00');
+    return d.getFullYear()===year && d.getMonth()===month;
+  };
+  const nm = item.name.toLowerCase();
+  let match = entries.filter(e => inMonthNeg(e) && (e.label||'')===item.name);
+  if(!match.length) match = entries.filter(e => inMonthNeg(e) &&
+      ((e.label||'').toLowerCase().includes(nm) || nm.includes((e.label||'').toLowerCase())));
+  if(!match.length){ alert('No logged payment found for this item this month. If it\u2019s in your transaction history, you can delete it there.'); return; }
+  if(!confirm(`Remove the logged "${item.name}" payment for this month? It will go back to unpaid.`)) return;
+  const ids = new Set(match.map(e=>e.id));
+  entries = entries.filter(e => !ids.has(e.id));
+  saveRender();
+};
+
+// ═══════════════════════════════════════════════
+// RECURRING CRUD
+// ═══════════════════════════════════════════════
+function onRecPer(){
+  const p=document.getElementById('re-per').value;
+  const lbl=document.getElementById('re-dl'),hint=document.getElementById('re-mhint');
+  if(p==='monthly'){lbl.innerText='First Payment Date (day repeats monthly)';hint.style.display='block';}
+  else{lbl.innerText='First / Reference Occurrence Date';hint.style.display='none';}
+}
+function parseOverrides(s){
+  if(!s||!s.trim())return null;
+  const r={};s.split(',').forEach(p=>{const[m,a]=p.trim().split(':');const mi=parseInt(m),av=parseFloat(a);if(!isNaN(mi)&&!isNaN(av))r[mi]=av;});
+  return Object.keys(r).length?r:null;
+}
+function fmtOverrides(o){if(!o)return'';return Object.entries(o).map(([k,v])=>`${k}:${v}`).join(',');}
+
+function saveRec(){
+  const nm=document.getElementById('re-nm').value.trim();
+  const amt=parseFloat(document.getElementById('re-amt').value);
+  const cur=document.getElementById('re-cur').value;
+  const cat=document.getElementById('re-cat').value;
+  const per=document.getElementById('re-per').value;
+  const sd=document.getElementById('re-sd').value;
+  const ovr=parseOverrides(document.getElementById('re-ovr').value);
+  const nt=document.getElementById('re-nt').value.trim();
+  const adj=document.getElementById('re-adj').checked;
+  const pay=document.getElementById('re-pay').value;
+  if(!nm||isNaN(amt)||amt<=0){alert("Enter a valid name and amount.");return;}
+  if(!sd){alert("Set a reference/start date.");return;}
+  const item={id:editRecId||Date.now(),name:nm,amount:amt,currency:cur,category:cat,period:per,startDate:sd,monthOverrides:ovr,note:nt,adjustBack:adj,payMethod:pay,active:true};
+  if(editRecId){const i=recItems.findIndex(r=>r.id===editRecId);if(i!==-1)recItems[i]={...recItems[i],...item};cancelRecEdit();}
+  else recItems.push(item);
+  persist();
+  renderRMList();renderDashboard();
+}
+function editRec(id){
+  const item=recItems.find(r=>r.id===id);if(!item)return;
+  editRecId=id;
+  document.getElementById('re-nm').value=item.name;
+  document.getElementById('re-amt').value=item.amount;
+  document.getElementById('re-cur').value=item.currency;
+  document.getElementById('re-cat').value=item.category;
+  document.getElementById('re-per').value=item.period;
+  document.getElementById('re-sd').value=item.startDate||'';
+  document.getElementById('re-ovr').value=fmtOverrides(item.monthOverrides);
+  document.getElementById('re-nt').value=item.note||'';
+  document.getElementById('re-adj').checked=!!item.adjustBack;
+  document.getElementById('re-pay').value=item.payMethod||'Cash';
+  document.getElementById('re-can-btn').style.display='inline';
+  onRecPer();
+}
+function cancelRecEdit(){
+  editRecId=null;
+  ['re-nm','re-amt','re-nt','re-sd','re-ovr'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('re-adj').checked=false;
+  document.getElementById('re-pay').value='Cash';
+  document.getElementById('re-can-btn').style.display='none';
+}
+function delRec(id){
+  if(!confirm("Remove this recurring item?"))return;
+  recItems=recItems.filter(r=>r.id!==id);
+  persist();
+  renderRMList();renderDashboard();
+}
+function toggleRec(id){
+  const item=recItems.find(r=>r.id===id);if(!item)return;
+  item.active=!item.active;
+  persist();
+  renderRMList();renderDashboard();
+}
+function renderRMList(){
+  const c=document.getElementById('rm-list');
+  if(!recItems.length){c.innerHTML='<div class="muted" style="font-size:.82rem;">No items yet.</div>';return;}
+  c.innerHTML=recItems.map(item=>{
+    const nx=item.active?nextOcc(item):null;
+    const ns=nx?fmt(nx):(item.active?'—':'Inactive');
+    const as=item.currency==='EUR'?`€${item.amount.toLocaleString()}`:`¥${item.amount.toLocaleString()}`;
+    const ovStr=item.monthOverrides?` <span class="bdg b-bl">Overrides</span>`:'';
+    return`<div class="rm-it ${item.active?'':'inactive'}">
+      <div style="flex:1;min-width:0;">
+        <div class="rm-n">${item.name}${ovStr} <span class="muted" style="font-weight:400;font-size:.72rem;">(${item.category})</span></div>
+        <div class="rm-m">${as} · ${PL[item.period]||item.period} · Next: ${ns}${item.note?' · '+item.note:''}</div>
+      </div>
+      <div class="rm-b">
+        <button class="bsm" onclick="toggleRec(${item.id})" style="background:${item.active?'#555':'var(--green)'};">${item.active?'⏸':'▶'}</button>
+        <button class="bsm born" onclick="editRec(${item.id})">✏️</button>
+        <button class="bsm bred" onclick="delRec(${item.id})">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════
+// HOLDINGS CRUD
+// ═══════════════════════════════════════════════
+async function fetchHoldPrice(){
+  const ticker=document.getElementById('h-tick').value.trim();
+  if(!ticker){alert("Enter a ticker symbol first (e.g. 2558.T)");return;}
+  const btn=document.getElementById('h-fetch-btn');btn.innerText="⏳";
+  try{
+    const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
+    const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const res=await fetch(proxy);const data=await res.json();
+    const parsed=JSON.parse(data.contents);
+    const price=parsed.chart.result[0].meta.regularMarketPrice;
+    document.getElementById('h-cur').value=price.toFixed(0);
+    btn.innerText="✅";setTimeout(()=>btn.innerText="🔄 Fetch Price",2500);
+  }catch(err){
+    btn.innerText="❌ Failed";setTimeout(()=>btn.innerText="🔄 Fetch Price",2500);
+    alert("Could not fetch price. Try updating manually, or check the ticker symbol.");
+  }
+}
+function saveHolding(){
+  const nm=document.getElementById('h-nm').value.trim();
+  const acc=document.getElementById('h-acc').value;
+  const un=parseFloat(document.getElementById('h-un').value);
+  const avg=parseFloat(document.getElementById('h-avg').value);
+  const cur=parseFloat(document.getElementById('h-cur').value);
+  const tick=document.getElementById('h-tick').value.trim();
+  if(!nm||isNaN(un)||isNaN(avg)){alert("Enter name, units, and average buy price.");return;}
+  const h={id:editHoldId||Date.now(),name:nm,account:acc,ticker:tick,units:un,avgBuyPrice:avg,currentPrice:cur||avg,lastUpdated:new Date().toISOString().split('T')[0]};
+  if(editHoldId){const i=holdings.findIndex(x=>x.id===editHoldId);if(i!==-1)holdings[i]=h;cancelHoldEdit();}
+  else holdings.push(h);
+  persist();
+  renderHoldingsList();renderDashboard();
+}
+function editHold(id){
+  const h=holdings.find(x=>x.id===id);if(!h)return;
+  editHoldId=id;
+  document.getElementById('h-nm').value=h.name;
+  document.getElementById('h-acc').value=h.account;
+  document.getElementById('h-un').value=h.units;
+  document.getElementById('h-avg').value=h.avgBuyPrice;
+  document.getElementById('h-cur').value=h.currentPrice;
+  document.getElementById('h-tick').value=h.ticker||'';
+  document.getElementById('h-can-btn').style.display='inline';
+}
+function cancelHoldEdit(){
+  editHoldId=null;
+  ['h-nm','h-un','h-avg','h-cur','h-tick'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('h-can-btn').style.display='none';
+}
+function delHolding(id){
+  if(!confirm("Remove this holding?"))return;
+  holdings=holdings.filter(x=>x.id!==id);
+  persist();
+  renderHoldingsList();renderDashboard();
+}
+async function refreshAllPrices(){
+  const btn=document.getElementById('h-refresh-all');if(btn)btn.innerText="⏳ Refreshing…";
+  for(const h of holdings){
+    if(!h.ticker)continue;
+    try{
+      const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(h.ticker)}?interval=1d&range=1d`;
+      const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      const res=await fetch(proxy);const data=await res.json();
+      const parsed=JSON.parse(data.contents);
+      const price=parsed.chart.result[0].meta.regularMarketPrice;
+      h.currentPrice=price;h.lastUpdated=new Date().toISOString().split('T')[0];
+    }catch{}
+  }
+  persist();
+  renderHoldingsList();renderDashboard();
+  if(btn)btn.innerText="🔄 Refresh All";
+}
+function renderHoldingsList(){
+  const c=document.getElementById('hold-list');
+  if(!holdings.length){c.innerHTML='<div class="muted" style="font-size:.82rem;">No holdings yet. Add above.</div>';return;}
+  let totInv=0,totMkt=0;
+  holdings.forEach(h=>{totInv+=h.units*h.avgBuyPrice;totMkt+=h.units*h.currentPrice;});
+  const totPnl=totMkt-totInv,pct=totInv>0?(totPnl/totInv*100).toFixed(1):0;
+  const sum=document.getElementById('h-sum');sum.style.display='flex';
+  sum.innerHTML=`
+    <div class="h-ss"><div class="h-sl">Total Invested</div><div class="h-sv">¥${totInv.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
+    <div class="h-ss"><div class="h-sl">Market Value</div><div class="h-sv">¥${totMkt.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
+    <div class="h-ss"><div class="h-sl">Total P&L</div><div class="h-sv" style="color:${totPnl>=0?'var(--green)':'var(--red)'};">¥${totPnl.toLocaleString(undefined,{maximumFractionDigits:0})} (${totPnl>=0?'+':''}${pct}%)</div></div>`;
+  c.innerHTML=`<div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+    <button id="h-refresh-all" onclick="refreshAllPrices()" class="bsm" style="background:var(--accent);">🔄 Refresh All Prices</button>
+  </div>`+holdings.map(h=>{
+    const inv=h.units*h.avgBuyPrice,mkt=h.units*h.currentPrice,pnl=mkt-inv,pct2=inv>0?(pnl/inv*100).toFixed(1):0;
+    const chg=h.currentPrice-h.avgBuyPrice,chgPct=h.avgBuyPrice>0?(chg/h.avgBuyPrice*100).toFixed(1):0;
+    return`<div class="hl-it">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div class="hl-n">${h.name}</div>
+          <div class="hl-m">${h.account}${h.ticker?' · '+h.ticker:''} · Last updated: ${h.lastUpdated||'—'}</div>
+        </div>
+        <div style="display:flex;gap:3px;">
+          <button class="bsm born" onclick="editHold(${h.id})">✏️</button>
+          <button class="bsm bred" onclick="delHolding(${h.id})">✕</button>
+        </div>
+      </div>
+      <div class="hl-row">
+        <div class="hl-stat"><div class="hl-sl">Units</div><div class="hl-sv">${h.units.toLocaleString()}</div></div>
+        <div class="hl-stat"><div class="hl-sl">Avg Buy</div><div class="hl-sv">¥${h.avgBuyPrice.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
+        <div class="hl-stat"><div class="hl-sl">Current</div><div class="hl-sv">¥${h.currentPrice.toLocaleString(undefined,{maximumFractionDigits:0})} <span style="font-size:.7rem;color:${chg>=0?'var(--green)':'var(--red)'};">(${chg>=0?'+':''}${chgPct}%)</span></div></div>
+        <div class="hl-stat"><div class="hl-sl">Invested</div><div class="hl-sv">¥${inv.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
+        <div class="hl-stat"><div class="hl-sl">Value</div><div class="hl-sv">¥${mkt.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
+        <div class="hl-stat"><div class="hl-sl">P&L</div><div class="hl-sv" style="color:${pnl>=0?'var(--green)':'var(--red)'};">¥${pnl.toLocaleString(undefined,{maximumFractionDigits:0})} (${pnl>=0?'+':''}${pct2}%)</div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════
+// LIVE TRACKED INVESTMENTS  (auto units, no manual entry)
+// ═══════════════════════════════════════════════
+async function fetchTickerPrice(ticker){
+  const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5d`;
+  const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+  const res=await fetch(proxy);const data=await res.json();
+  const meta=JSON.parse(data.contents).chart.result[0].meta;
+  const price=meta.regularMarketPrice;
+  const prev=meta.chartPreviousClose||meta.previousClose||price;
+  if(!price)throw new Error('no price');
+  return {price,prevClose:prev};
+}
+// match a logged Investment entry to a tracked instrument by its keyword
+function matchTracked(label){
+  const l=(label||'').toLowerCase();
+  return trackedInv.find(t=>t.keyword&&l.includes(t.keyword.toLowerCase()))||null;
+}
+// derive invested / units / value from the ledger — nothing typed by hand
+function invSummary(inst){
+  const kw=(inst.keyword||'').toLowerCase();
+  const todayEOD=new Date();todayEOD.setHours(23,59,59,999);
+  let invested=0,units=0,pricedInv=0;
+  if(kw)for(const e of entries){
+    if(e.type!=='Investment'||e.currency==='EUR'||!e.date)continue;
+    if(!(e.label||'').toLowerCase().includes(kw))continue;
+    const ed=new Date(e.date+'T00:00:00');if(isNaN(ed)||ed>todayEOD)continue;
+    const amt=Math.abs(e.amount);invested+=amt;
+    if(e.unitPrice&&e.unitPrice>0){units+=amt/e.unitPrice;pricedInv+=amt;}
+  }
+  const price=inst.price||0;
+  const value=units*price+(invested-pricedInv); // unpriced slices held at cost (break-even)
+  return {invested,units,value,gain:value-invested,pct:invested>0?(value-invested)/invested*100:0};
+}
+async function refreshTracked(){
+  const btn=g('inv-refresh');if(btn)btn.innerText='⏳ Fetching…';
+  let ok=0;
+  for(const inst of trackedInv){
+    if(!inst.ticker)continue;
+    try{const r=await fetchTickerPrice(inst.ticker);inst.price=r.price;inst.prevClose=r.prevClose;inst.updated=new Date().toISOString().split('T')[0];ok++;}catch{}
+  }
+  persist();renderTracked();
+  if(btn)btn.innerText='🔄 Refresh Prices';
+  if(!ok&&trackedInv.some(t=>t.ticker))alert("Couldn't reach the price service right now. Try again in a moment, or check the ticker symbols.");
+}
+function renderTracked(){
+  const c=g('inv-list');if(!c)return;
+  if(!trackedInv.length){c.innerHTML='<div class="muted" style="font-size:.82rem;">No instruments yet. Tap ⚙️ Tickers to add some.</div>';return;}
+  let anyPrice=false;
+  let totInv=0,totVal=0;
+  const cards=trackedInv.map(inst=>{
+    const s=invSummary(inst);totInv+=s.invested;totVal+=s.value;
+    const hasP=inst.price&&inst.price>0;if(hasP)anyPrice=true;
+    const dc=(hasP&&inst.prevClose)?((inst.price-inst.prevClose)/inst.prevClose*100):null;
+    const dcStr=dc==null?'<span class="muted" style="font-size:.78rem;">—</span>':`<span style="color:${dc>=0?'var(--green)':'var(--red)'};font-size:.82rem;font-weight:600;">${dc>=0?'▲':'▼'} ${Math.abs(dc).toFixed(2)}%</span>`;
+    const gainStr=s.invested?` <span style="color:${s.gain>=0?'var(--green)':'var(--red)'};">(${s.gain>=0?'+':''}${jpy(s.gain)} · ${s.gain>=0?'+':''}${s.pct.toFixed(1)}%)</span>`:'';
+    return `<div class="card" style="padding:13px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+        <div class="hl-n" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(inst.name)}</div>
+        <div class="muted" style="font-size:.65rem;flex-shrink:0;">${esc(inst.ticker||'no ticker')}</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:5px;">
+        <div style="font-size:1.2rem;font-weight:700;">${hasP?'¥'+inst.price.toLocaleString(undefined,{maximumFractionDigits:1}):'—'}</div>
+        ${dcStr}
+      </div>
+      <div class="cdet" style="margin-top:8px;line-height:1.75;">
+        Invested: <strong>${jpy(s.invested)}</strong><br>
+        Shares/Units: <strong>${s.units?s.units.toLocaleString(undefined,{maximumFractionDigits:3}):'—'}</strong><br>
+        Est. Value: <strong>${s.invested?jpy(s.value):'—'}</strong>${gainStr}
+      </div>
+    </div>`;
+  }).join('');
+  const tg=totVal-totInv;
+  const header=totInv?`<div class="h-sum" style="margin-bottom:10px;">
+      <div class="h-ss"><div class="h-sl">Total Invested</div><div class="h-sv">${jpy(totInv)}</div></div>
+      <div class="h-ss"><div class="h-sl">Est. Value</div><div class="h-sv">${jpy(totVal)}</div></div>
+      <div class="h-ss"><div class="h-sl">Gain / Loss</div><div class="h-sv" style="color:${tg>=0?'var(--green)':'var(--red)'};">${tg>=0?'+':''}${jpy(tg)} (${totInv?(tg>=0?'+':'')+(tg/totInv*100).toFixed(1)+'%':'—'})</div></div>
+    </div>`:'';
+  let tip='';
+  if(trackedInv.some(t=>t.ticker)&&!anyPrice)tip='<div class="muted" style="font-size:.72rem;margin-top:8px;">Tip: press 🔄 Refresh Prices to pull live market values.</div>';
+  c.innerHTML=header+'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;">'+cards+'</div>'+tip;
+}
+
+// ── ticker config modal ──
+function openInvCfg(){renderInvCfg();g('inv-modal').style.display='flex';}
+function renderInvCfg(){
+  const c=g('inv-cfg-list');if(!c)return;
+  c.innerHTML=trackedInv.map(t=>`<div class="exp-row" style="gap:6px;align-items:center;">
+      <input value="${esc(t.name)}" placeholder="Name" onchange="updTracked(${t.id},'name',this.value)" style="flex:2;">
+      <input value="${esc(t.ticker||'')}" placeholder="Ticker (2558.T)" onchange="updTracked(${t.id},'ticker',this.value)" style="flex:1.5;">
+      <input value="${esc(t.keyword||'')}" placeholder="Label match" onchange="updTracked(${t.id},'keyword',this.value)" style="flex:1.5;">
+      <button class="bsm bred" onclick="delTracked(${t.id})">✕</button>
+    </div>`).join('')||'<div class="muted" style="font-size:.82rem;">None yet.</div>';
+}
+function updTracked(id,field,val){const t=trackedInv.find(x=>x.id===id);if(!t)return;t[field]=val.trim();persist();renderTracked();}
+function addTracked(){trackedInv.push({id:Date.now(),name:'New Instrument',ticker:'',keyword:'',price:null,prevClose:null,updated:null});persist();renderInvCfg();renderTracked();}
+function delTracked(id){if(!confirm("Remove this tracked instrument? (Your logged transactions are kept.)"))return;trackedInv=trackedInv.filter(x=>x.id!==id);persist();renderInvCfg();renderTracked();}
+
+// ═══════════════════════════════════════════════
+// NET-WORTH SNAPSHOTS  (monthly growth history)
+// ═══════════════════════════════════════════════
+function maybeSnapshot(net,parts){
+  if(!entries.length)return;                       // don't snapshot an empty/unsynced state
+  const ym=`${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,'0')}`;
+  if(snapshots.some(s=>s.ym===ym))return;          // already captured this month
+  snapshots.push({ym,date:localISO(TODAY),net:Math.round(net),
+    cash:Math.round(parts.cash),eur:Math.round(parts.eur),nisa:Math.round(parts.nisa),
+    stk:Math.round(parts.stk),hold:Math.round(parts.hold)});
+  snapshots.sort((a,b)=>a.ym<b.ym?-1:1);
+  persist();
+}
+function takeSnapshotNow(){
+  const ym=`${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,'0')}`;
+  snapshots=snapshots.filter(s=>s.ym!==ym);        // overwrite this month with the latest value
+  renderDashboard();                               // recompute → maybeSnapshot re-adds it
+  renderNetWorthChart();
+  alert("📸 Snapshot saved for "+ym+".");
+}
+function renderNetWorthChart(){
+  const box=g('nw-chart');if(!box)return;
+  if(snapshots.length<1){box.innerHTML='<div class="muted" style="font-size:.82rem;">No snapshots yet. One is logged automatically the first time you open the app each month.</div>';return;}
+  const data=snapshots.slice().sort((a,b)=>a.ym<b.ym?-1:1);
+  const W=Math.max(320,data.length*70),H=180,pad=34;
+  const vals=data.map(s=>s.net),max=Math.max(...vals,1),min=Math.min(...vals,0);
+  const span=(max-min)||1;
+  const x=i=>pad+(data.length<=1?(W-2*pad)/2:i*(W-2*pad)/(data.length-1));
+  const y=v=>H-pad-((v-min)/span)*(H-2*pad);
+  let pts=data.map((s,i)=>`${x(i)},${y(s.net)}`).join(' ');
+  let dots=data.map((s,i)=>`<circle cx="${x(i)}" cy="${y(s.net)}" r="3.5" fill="var(--green)"></circle>`+
+    `<text x="${x(i)}" y="${y(s.net)-9}" font-size="9" fill="var(--text,#ddd)" text-anchor="middle">${(s.net/1000).toFixed(0)}k</text>`+
+    `<text x="${x(i)}" y="${H-pad+14}" font-size="9" fill="var(--muted)" text-anchor="middle">${s.ym.slice(2)}</text>`).join('');
+  const first=data[0].net,last=data[data.length-1].net,chg=last-first,pct=first?(chg/first*100):0;
+  box.innerHTML=`<div style="font-size:.8rem;margin-bottom:6px;">Latest: <strong>${jpy(last)}</strong>`+
+    (data.length>1?` <span style="color:${chg>=0?'var(--green)':'var(--red)'};">(${chg>=0?'+':''}${jpy(chg)} · ${chg>=0?'+':''}${pct.toFixed(1)}% since ${data[0].ym})</span>`:'')+`</div>`+
+    `<div style="overflow-x:auto;"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:100%;">`+
+    `<polyline points="${pts}" fill="none" stroke="var(--green)" stroke-width="2"></polyline>${dots}</svg></div>`;
+}
+
+// ═══════════════════════════════════════════════
+// MODALS
+// ═══════════════════════════════════════════════
+function openRecModal(){
+  if(!document.getElementById('re-sd').value)document.getElementById('re-sd').valueAsDate=new Date();
+  onRecPer();renderRMList();document.getElementById('rec-modal').style.display='flex';
+}
+function openHoldingsModal(){renderHoldingsList();document.getElementById('hold-modal').style.display='flex';}
+function openReports(){
+  document.getElementById('reports-modal').style.display='flex';
+  renderNetWorthChart();
+  const ys=document.getElementById('exp-yr');ys.innerHTML='';
+  let yrs=new Set(entries.map(e=>e.date?.substring(0,4)));
+  if(!yrs.size)yrs.add(String(TODAY.getFullYear()));
+  [...yrs].sort().reverse().forEach(y=>ys.appendChild(new Option(y,y)));
+  document.getElementById('exp-mo').value=`${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,'0')}`;
+}
+function closeM(id){document.getElementById(id).style.display='none';}
+document.querySelectorAll('.mbg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeM(m.id);}));
+
+// ═══════════════════════════════════════════════
+// TEMPLATES
+// ═══════════════════════════════════════════════
+function buildTplUI(){
+  const c=document.getElementById('tpl-grid');c.innerHTML='';
+  Object.entries(dflts).forEach(([k,d])=>{
+    const b=document.createElement('button');b.className='tpl-btn';
+    b.innerText=`${k} (${d.currency==='EUR'?'€':'¥'}${d.amount})`;
+    b.onclick=()=>{
+      if(editId)cancelEdit();
+      document.getElementById('type').value=d.type;
+      document.getElementById('label').value=d.label;
+      document.getElementById('amount').value=d.amount;
+      document.getElementById('currency').value=d.currency;
+      handleTypeChange();
+    };
+    c.appendChild(b);
+  });
+}
+function manageDefaults(){
+  const k=prompt("Template key:");if(!k)return;
+  const o=dflts[k]||{type:"Utility",label:k,amount:0,currency:"JPY"};
+  const amt=prompt(`Amount for "${k}":`,o.amount);if(amt===null)return;
+  const cur=(prompt(`Currency (JPY or EUR):`,o.currency)||'JPY').toUpperCase();
+  dflts[k]={type:o.type,label:o.label,amount:parseFloat(amt)||0,currency:cur==='EUR'?'EUR':'JPY'};
+  persist();buildTplUI();
+}
+
+// ═══════════════════════════════════════════════
+// EXPORT / IMPORT
+// ═══════════════════════════════════════════════
+function exportCSV(ft){
+  if(!entries.length){alert("No data.");return;}
+  let filt=entries,sfx="Full";
+  if(ft==='year'){const y=document.getElementById('exp-yr').value;filt=entries.filter(e=>e.date?.startsWith(y));sfx=`Year_${y}`;}
+  else if(ft==='month'){const ym=document.getElementById('exp-mo').value;if(!ym)return;filt=entries.filter(e=>e.date?.startsWith(ym));sfx=`Month_${ym}`;}
+  if(!filt.length){alert("No records for that period.");return;}
+  let csv="\uFEFFID,Date,Type,Label,Amount,Currency,Rate,JPY Value,CC Card,Bill Date,Billing Cycle\n";
+  [...filt].sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(e=>{
+    const r=e.purchaseRate||eurRate,jpy=e.currency==='EUR'?e.amount*r:e.amount;
+    const bd=getBillDate(e);
+    csv+=`${e.id},${e.date},"${e.type}","${(e.label||'').replace(/"/g,'""')}",${e.amount},${e.currency},${r},${jpy.toFixed(0)},${e.ccType||''},${bd?fmt(bd):''},${e.billingCycle||''}\n`;
+  });
+  const a=document.createElement('a');a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=`Report_${sfx}.csv`;a.click();
+}
+function dlBackup(){
+  const a=document.createElement('a');
+  a.href="data:text/json;charset=utf-8,"+encodeURIComponent(JSON.stringify({data:entries,recurring:recItems,holdings,defaults:dflts,tracked:trackedInv,snapshots,rate:eurRate,expectedIncome:expInc}));
+  a.download=`Backup_${TODAY.getFullYear()}${String(TODAY.getMonth()+1).padStart(2,'0')}.json`;a.click();
+}
+function restoreBackup(evt){
+  const r=new FileReader();r.onload=e=>{
+    try{
+      const d=JSON.parse(e.target.result);
+      if(d.data)entries=d.data;
+      if(d.recurring){recItems=d.recurring;persist();}
+      if(d.holdings){holdings=d.holdings;persist();}
+      if(d.defaults){dflts=d.defaults;persist();buildTplUI();}
+      if(d.tracked){trackedInv=d.tracked;persist();}
+      if(d.snapshots){snapshots=d.snapshots;persist();}
+      if(d.rate){eurRate=parseFloat(d.rate);persist();document.getElementById('eur-r-inp').value=eurRate;}
+      if(d.expectedIncome){expInc=parseFloat(d.expectedIncome);persist();document.getElementById('exp-inc-inp').value=expInc;}
+      saveRender();closeM('reports-modal');alert("Backup restored!");
+    }catch{alert("Could not read backup file.");}
+  };
+  if(evt.target.files[0])r.readAsText(evt.target.files[0]);
+}
+
+// ═══════════════════════════════════════════════
+// COMPUTE MONTH DATA
+// ═══════════════════════════════════════════════
+// Card-paid recurring items that HAVEN'T been logged yet, but whose bill lands
+// in this month — so upcoming subscriptions appear on the CC bill cards now.
+function projectedCardBills(year,month){
+  const mS=new Date(year,month,1),mE=new Date(year,month+1,0,23,59,59,999);
+  let cc10=0,cc27=0,cc10Ents=[],cc27Ents=[];
+  for(const item of recItems){
+    if(!item.active)continue;
+    const card=(item.payMethod&&item.payMethod!=='Cash')?item.payMethod:null;
+    if(!card)continue;
+    // an occurrence in this month, the month before, or two before, can bill in M
+    for(let back=0;back<=2;back++){
+      let ky=year,km=month-back;while(km<0){km+=12;ky--;}
+      const occ=occInMonth(item,ky,km);
+      if(!occ)continue;
+      if(isPaid(item,ky,km))continue;                 // already logged → counted as a real entry
+      const occStr=occ.getFullYear()+'-'+String(occ.getMonth()+1).padStart(2,'0')+'-'+String(occ.getDate()).padStart(2,'0');
+      const bd=getBillDate({date:occStr,ccType:card});
+      if(!bd||bd<mS||bd>mE)continue;
+      const amt=amtForMonth(item,km);
+      const val=item.currency==='EUR'?amt*eurRate:amt;
+      const pseudo={label:item.name,amount:-Math.abs(val),currency:'JPY',ccType:card,date:occStr,_projected:true};
+      if(card==='PayPay'){cc27+=Math.abs(val);cc27Ents.push(pseudo);}
+      else{cc10+=Math.abs(val);cc10Ents.push(pseudo);}
+    }
+  }
+  return {cc10,cc27,cc10Ents,cc27Ents};
+}
+
+function computeMonthData(year,month){
+  const mS=new Date(year,month,1),mE=new Date(year,month+1,0,23,59,59,999);
+  let income=0,cashExp=0,cc10=0,cc27=0,cc10Ents=[],cc27Ents=[];
+  let euroBuy=0,stockBuy=0,cardBuy=0;
+
+  for(const e of entries){
+    if(!e.date)continue;
+    const ed=new Date(e.date+'T00:00:00');
+    const rate=e.purchaseRate||eurRate;
+    const val=e.currency==='EUR'?e.amount*rate:e.amount;
+    const inMonth=ed>=mS&&ed<=mE;
+
+    if(e.type==='Salary/Bonus'||e.type==='Extra Allowance'){
+      if(inMonth)income+=val;
+    } else if(e.type==='Credit Card'||e.type==='Existing Debt Setup'){
+      const bd=getBillDate(e);
+      if(bd&&bd>=mS&&bd<=mE){
+        const abs=Math.abs(val);
+        if(e.ccType==='PayPay'){cc27+=abs;cc27Ents.push(e);}
+        else{cc10+=abs;cc10Ents.push(e);}
+      }
+    } else if(e.type!=='Current Cash Setup'&&e.type!=='Investment'){
+      if(inMonth)cashExp+=Math.abs(val);
+    }
+
+    // ── "money used this month" breakdown, counted by activity/purchase date ──
+    if(inMonth){
+      if(e.type==='Investment'){
+        if(e.currency==='EUR')euroBuy+=Math.abs(val);   // yen spent acquiring euros
+        else stockBuy+=Math.abs(val);                    // yen invested in stocks/NISA
+      } else if(e.type==='Credit Card'){
+        cardBuy+=Math.abs(val);                           // card purchases (billed later)
+      }
+    }
+  }
+  // fold in not-yet-logged card subscriptions that bill this month
+  const proj=projectedCardBills(year,month);
+  cc10+=proj.cc10;cc27+=proj.cc27;
+  cc10Ents=cc10Ents.concat(proj.cc10Ents);cc27Ents=cc27Ents.concat(proj.cc27Ents);
+
+  const totalExp=cashExp+cc10+cc27;
+  const spend={cash:cashExp,euro:euroBuy,stock:stockBuy,card:cardBuy,
+               total:cashExp+euroBuy+stockBuy+cardBuy};
+  return{income,cashExp,cc10,cc27,cc10Ents,cc27Ents,totalExp,spend,netFlow:income-totalExp};
+}
+
+// ═══════════════════════════════════════════════
+// MAIN RENDER
+// ═══════════════════════════════════════════════
+function g(id){return document.getElementById(id);}
+function jpy(n){return`¥${n.toLocaleString(undefined,{maximumFractionDigits:0})}`;}
+
+function renderDashboard(){
+  // ── TRIGGER AUTO SETTLE ENGINE ──
+  // Only settle for the ACTUAL current month, never the month being browsed,
+  // so navigating to past months can't spawn back-dated entries.
+  if (autoSettleRecurring(TODAY.getFullYear(), TODAY.getMonth())) {
+      console.log("Auto-settle engine logged an expired transaction successfully.");
+  }
+
+  updMNav();
+  const todayEOD=new Date();todayEOD.setHours(23,59,59,999);
+
+  let w={jpy:0,nisa:0,stk:0,eur:0},eurAcq=0,eurSpnd=0,futInc=0,futExp=0,pendingCC=0;
+
+  for(const e of entries){
+    if(!e.date)continue;
+    const ed=new Date(e.date+'T00:00:00');
+    const rate=e.purchaseRate||eurRate;
+    const val=e.currency==='EUR'?e.amount*rate:e.amount;
+    const isFut=ed>todayEOD;
+
+    if(!isFut){
+      if(e.type==='Current Cash Setup'){
+        // starting balances: no cash outflow, just seed the buckets
+        if(e.currency==='EUR')w.eur+=Math.abs(e.amount);else w.jpy+=e.amount;
+      } else if(e.type==='Investment'){
+        const lbl=(e.label||'').toLowerCase();
+        w.jpy+=val;                                  // EVERY investment is paid out of cash (val is negative)
+        if(e.currency==='EUR'){
+          w.eur+=Math.abs(e.amount);                 // …and the euros land in the euro bucket
+          eurAcq+=Math.abs(e.amount);eurSpnd+=Math.abs(e.amount)*rate;
+        } else if(lbl.includes('nisa')){w.nisa+=Math.abs(val);}
+        else {w.stk+=Math.abs(val);}
+      } else if(e.type==='Credit Card'||e.type==='Existing Debt Setup'){
+        const bd=getBillDate(e);
+        if(bd&&bd<=todayEOD){if(e.currency==='EUR')w.eur+=e.amount;else w.jpy+=e.amount;}
+        else if(bd&&bd>todayEOD){pendingCC+=Math.abs(val);}
+      } else {
+        if(e.currency==='EUR')w.eur+=e.amount;else w.jpy+=e.amount;
+      }
+    }
+    if(isFut&&e.type!=='Current Cash Setup'&&e.type!=='Existing Debt Setup'){
+      if(val>0)futInc+=val;else futExp+=Math.abs(val);
+    }
+  }
+
+  const md=computeMonthData(vY,vM);
+  const recThisM=getRecForMonth(vY,vM);
+  const recUnpaid=recThisM.filter(r=>!isPaid(r.item,vY,vM));
+  const isCard=it=>it.payMethod&&it.payMethod!=='Cash';
+  const recUnpaidAmt=recUnpaid.reduce((s,r)=>isCard(r.item)?s:s+(r.item.currency==='EUR'?r.amount*eurRate:r.amount),0);
+  const recUnpaidCard=recUnpaid.reduce((s,r)=>isCard(r.item)?s+(r.item.currency==='EUR'?r.amount*eurRate:r.amount):s,0);
+
+  const profit=md.income-md.totalExp;
+  g('s-inc').innerText=jpy(md.income);
+  g('s-exp').innerText=jpy(md.spend.total);
+  const sp=md.spend,brk=[`Cash: ${jpy(sp.cash)}`];
+  if(sp.card)brk.push(`Card: ${jpy(sp.card)}`);
+  if(sp.euro)brk.push(`Euro: ${jpy(sp.euro)}`);
+  if(sp.stock)brk.push(`Stocks/NISA: ${jpy(sp.stock)}`);
+  g('s-exp-brk').innerHTML=brk.join('<br>');
+  g('s-prf').innerText=jpy(profit);
+  g('s-prf').className=`si-v ${profit>=0?'green':'red'}`;
+  g('s-cc10').innerText=jpy(md.cc10);
+  g('s-cc27').innerText=jpy(md.cc27);
+
+  // ── month-over-month comparison ──
+  let pm=vM-1,py=vY;if(pm<0){pm=11;py--;}
+  const prev=computeMonthData(py,pm);
+  const delta=(cur,prv)=>{
+    if(prv===0)return cur===0?'<span class="muted">–</span>':'<span style="color:var(--muted);">new</span>';
+    const p=(cur-prv)/Math.abs(prv)*100;const up=p>=0;
+    return `<span style="color:${up?'var(--green)':'var(--red)'};">${up?'▲':'▼'}${Math.abs(p).toFixed(0)}%</span>`;
+  };
+  g('mom-cmp').innerHTML=`vs last month — Income ${delta(md.income,prev.income)} · Spent ${delta(md.spend.total,prev.spend.total)} · Net ${delta(md.netFlow,prev.netFlow)}`;
+
+  // ── NISA contribution tracker (current calendar year) ──
+  const yr=TODAY.getFullYear();let nisaYTD=0;
+  for(const e of entries){
+    if(e.type!=='Investment'||e.currency==='EUR'||!e.date)continue;
+    if(!(e.label||'').toLowerCase().includes('nisa'))continue;
+    if(new Date(e.date+'T00:00:00').getFullYear()!==yr)continue;
+    nisaYTD+=Math.abs(e.amount);
+  }
+  const nisaPct=nisaCap>0?Math.min(100,nisaYTD/nisaCap*100):0;
+  g('nisa-yr').innerText=yr;
+  g('nisa-val').innerText=jpy(nisaYTD);
+  g('nisa-bar').style.width=nisaPct+'%';
+  g('nisa-bar').style.background=nisaPct>=100?'var(--orange)':'var(--green)';
+  g('nisa-sub').innerHTML=`${nisaPct.toFixed(1)}% of ${jpy(nisaCap)} cap · ${jpy(Math.max(0,nisaCap-nisaYTD))} left`;
+
+  // ── CC bill forecast: next 3 months ──
+  let fc=[];
+  for(let i=1;i<=3;i++){
+    let fm=vM+i,fy=vY;while(fm>11){fm-=12;fy++;}
+    const fd=computeMonthData(fy,fm);const tot=fd.cc10+fd.cc27;
+    fc.push(`<div style="display:flex;justify-content:space-between;"><span>${MN[fm]} ${fy}</span><span style="color:${tot>0?'var(--red)':'var(--muted)'};">${jpy(tot)}</span></div>`);
+  }
+  g('cc-fc').innerHTML=fc.join('');
+
+  g('c-nf').innerText=jpy(md.netFlow);
+  g('c-nf').className=`cval ${md.netFlow>=0?'green':'red'}`;
+  g('c-nf-s').innerText=`Income ${jpy(md.income)} − Expenses ${jpy(md.totalExp)}`;
+
+  g('c-cc10').innerText=jpy(md.cc10);
+  g('c-cc27').innerText=jpy(md.cc27);
+  g('cc10-brk').innerHTML=buildCCBrk(md.cc10Ents);
+  g('cc27-brk').innerHTML=buildCCBrk(md.cc27Ents);
+
+  g('w-cash').innerText=jpy(w.jpy);
+  g('w-nisa').innerText=jpy(w.nisa);
+  g('w-stk').innerText=jpy(w.stk);
+  g('w-eur').innerText=`${w.eur.toLocaleString()} €`;
+  const eurV=w.eur*eurRate,eurPnl=(eurAcq*eurRate)-eurSpnd;
+  g('w-eur-det').innerHTML=`Value: ${jpy(eurV)} | Avg Buy: ¥${eurAcq>0?(eurSpnd/eurAcq).toFixed(1):'0'}/€ | Gain: <strong style="color:${eurPnl>=0?'var(--green)':'var(--red)'};">${jpy(eurPnl)}</strong>`;
+
+  let holdMkt=0;
+  if(holdings.length){
+    let tInv=0,tMkt=0;holdings.forEach(h=>{tInv+=(h.units||0)*(h.avgBuyPrice||0);tMkt+=(h.units||0)*(h.currentPrice||0);});
+    holdMkt=tMkt;const pnl=tMkt-tInv;
+    g('w-holdings-sum').style.display='block';
+    g('w-holdings-sum').innerHTML=`Holdings: ${jpy(tMkt)} <span style="color:${pnl>=0?'var(--green)':'var(--red)'};">(${pnl>=0?'+':''}${jpy(pnl)})</span>`;
+  }
+  const netWorth=w.jpy+eurV+w.nisa+w.stk+holdMkt;
+  g('w-net').innerText=jpy(netWorth);
+  g('w-net').style.color=netWorth>=0?'var(--green)':'var(--red)';
+  maybeSnapshot(netWorth,{cash:w.jpy,eur:eurV,nisa:w.nisa,stk:w.stk,hold:holdMkt});
+
+  const leewayBase=isPastM()?md.income:Math.max(md.income,expInc);
+  const leeway=leewayBase-md.totalExp-recUnpaidAmt;
+  g('c-lwy').innerText=jpy(Math.abs(leeway));
+  g('c-lwy').className=`cval ${leeway>=0?'green':'red'}`;
+  g('c-lwy-s').innerHTML=`${leeway>=0?'✅ Free to spend':'⚠️ Over budget'}<br>Base ${jpy(leewayBase)} − Spent ${jpy(md.totalExp)} − Recurring left ${jpy(recUnpaidAmt)}`+
+    (recUnpaidCard>0?`<br><span style="color:var(--muted);">(+ ${jpy(recUnpaidCard)} on cards, billed later)</span>`:'');
+  if(isCurM()&&leeway>0){
+    const daysInM=new Date(vY,vM+1,0).getDate();
+    const daysLeft=Math.max(1,daysInM-TODAY.getDate()+1);
+    g('c-lwy-s').innerHTML+=`<br><strong style="color:var(--green);">≈ ${jpy(leeway/daysLeft)}/day</strong> for ${daysLeft} day${daysLeft>1?'s':''} left`;
+  }
+
+  const nextMo=(TODAY.getMonth()+1)%12,nextYr=TODAY.getMonth()===11?TODAY.getFullYear()+1:TODAY.getFullYear();
+  const nextRec=getRecForMonth(nextYr,nextMo);
+  const nextRecAmt=nextRec.reduce((s,r)=>(r.item.payMethod&&r.item.payMethod!=='Cash')?s:s+(r.item.currency==='EUR'?r.amount*eurRate:r.amount),0);
+  const projected=w.jpy+expInc-pendingCC-nextRecAmt+futInc-futExp;
+
+  g('f-bank').innerText=jpy(w.jpy);
+  g('f-sal').innerText=`+ ${jpy(expInc)}`;
+  g('f-cc').innerText=`− ${jpy(pendingCC)}`;
+  g('f-rec').innerText=`− ${jpy(nextRecAmt)}`;
+  g('f-fi').innerText=`+ ${jpy(futInc)}`;
+  g('f-fo').innerText=`− ${jpy(futExp)}`;
+  g('f-proj').innerText=jpy(projected);
+  g('f-proj').style.color=projected>=0?'var(--green)':'var(--red)';
+
+  renderUpcoming(recThisM);
+  renderTracked();
+  drawSankey();
+  renderHist();
+}
+
+function buildCCBrk(ents){
+  if(!ents.length)return'<div class="muted" style="font-size:.7rem;padding-top:3px;">No bills due this month</div>';
+  return ents.map(e=>{
+    const rate=e.purchaseRate||eurRate,val=e.currency==='EUR'?Math.abs(e.amount)*rate:Math.abs(e.amount);
+    const amtStr=e.currency==='EUR'?`€${Math.abs(e.amount).toLocaleString()} (${jpy(val)})`:jpy(val);
+    const bd=getBillDate(e);
+    const meta=e._projected?`(🔁 scheduled ${e.date}${bd?', bills '+fmt(bd):''})`:`(bought ${e.date}${bd?', due '+fmt(bd):''})`;
+    const op=e._projected?'opacity:.7;font-style:italic;':'';
+    return`<div class="cc-row" style="${op}"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;color:var(--text);">${e.label||'?'} <span class="muted" style="font-size:.65rem;">${meta}</span></span><span style="flex-shrink:0;color:var(--red);">${amtStr}</span></div>`;
+  }).join('');
+}
+
+function renderUpcoming(items){
+  const c=g('up-list');
+  if(!items.length){c.innerHTML='<div class="muted" style="font-size:.82rem;">No recurring payments due this month.</div>';return;}
+  const futM=!isCurM()&&!isPastM();
+  c.innerHTML=items.map(({item,date,amount})=>{
+    const paid=isPaid(item,vY,vM);
+    const isInv=item.category==='Investment';
+    const amtStr=item.currency==='EUR'?`€${amount.toLocaleString()}`:`¥${amount.toLocaleString()}`;
+    const d=date.getDate();const sfx=d===1?'st':d===2?'nd':d===3?'rd':'th';
+    let bc=paid?'paid':isInv?'inv':futM?'fut':'';
+
+    // Manual Settle logic format for elements that have NOT been auto-paid
+    const dateFmt = date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0');
+    const btnHtml = paid
+      ? `<button class="bsm" style="background:#7f8c8d; margin-left:10px; cursor:pointer;" onclick="unsettleRec(${item.id}, ${vY}, ${vM})" title="Remove the logged payment for this month">↩ Undo</button>`
+      : (!isInv ? `<button class="bsm" style="background:var(--purple); margin-left:10px; cursor:pointer;" onclick="manuallySettleRec(${item.id}, '${dateFmt}', ${amount})">Settle</button>` : '');
+    const card=(item.payMethod&&item.payMethod!=='Cash')?item.payMethod:null;
+    const payBadge=card?`<span class="muted" style="font-size:.66rem;">· 💳 ${card}</span>`:`<span class="muted" style="font-size:.66rem;">· 💴 Cash</span>`;
+
+    return`<div class="rec-it ${bc}">
+      <div>
+        <div class="rec-n">${item.name}${paid?'<span class="pbdg">✓ Paid</span>':''} <span class="muted" style="font-size:.67rem;">${PL[item.period]||item.period}</span></div>
+        <div class="rec-m">${item.category} · Due ${d}${sfx} ${payBadge}${item.note?' · '+item.note:''}</div>
+      </div>
+      <div style="display:flex; align-items:center;">
+        <div class="rec-a" style="color:${paid?'var(--green)':isInv?'var(--accent)':'var(--red)'};">${paid?'':isInv?'':'−'}${amtStr}</div>
+        ${btnHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════
+// FLOW CHART
+// ═══════════════════════════════════════════════
+function drawSankey() {
+  const mode = g('sk-mode').value;
+  const now  = new Date();
+  const mS   = new Date(vY, vM, 1), mE = new Date(vY, vM+1, 0, 23, 59, 59, 999);
+
+  let flowInc = 0, flowExp = {}, flowCC = 0;
+
+  for (const e of entries) {
+    if (!e.date || e.type === 'Current Cash Setup') continue;
+    const ed   = new Date(e.date + 'T00:00:00');
+    const rate = e.purchaseRate || eurRate;
+    const val  = e.currency === 'EUR' ? e.amount * rate : e.amount;
+
+    let inc = false;
+    if (mode === 'all') {
+      inc = e.type !== 'Existing Debt Setup';
+    } else if (mode === 'month') {
+      if (e.type === 'Credit Card' || e.type === 'Existing Debt Setup') {
+        const bd = getBillDate(e); inc = !!bd && bd >= mS && bd <= mE;
+      } else { inc = ed >= mS && ed <= mE; }
+    } else if (mode === 'purchase') {
+      inc = ed >= mS && ed <= mE;
+    } else if (mode === 'debt-10') {
+      const cS = new Date(now.getFullYear(), now.getMonth()-1, 16);
+      const cE = new Date(now.getFullYear(), now.getMonth(),   15, 23, 59, 59);
+      if (ed >= cS && ed <= cE) inc = (e.type === 'Credit Card') ? e.ccType !== 'PayPay' : true;
+    } else if (mode === 'debt-27') {
+      const cS = new Date(now.getFullYear(), now.getMonth(),   1);
+      const cE = new Date(now.getFullYear(), now.getMonth()+1, 0, 23, 59, 59);
+      if (ed >= cS && ed <= cE) inc = (e.type === 'Credit Card') ? e.ccType === 'PayPay' : true;
+    }
+    if (!inc) continue;
+
+    if (val > 0) {
+      flowInc += val;
+    } else {
+      const cat = e.type === 'Credit Card' ? `CC: ${e.ccType || 'Card'}` : e.type;
+      flowExp[cat] = (flowExp[cat] || 0) + Math.abs(val);
+      if (e.type === 'Credit Card') flowCC += Math.abs(val);
+    }
+  }
+
+  const totalExp = Object.values(flowExp).reduce((a, b) => a + b, 0);
+  const net = flowInc - totalExp;
+
+  g('sk-net').innerText   = jpy(net);
+  g('sk-net').style.color = net >= 0 ? 'var(--green)' : 'var(--red)';
+  const dr = flowInc > 0 ? (flowCC / flowInc * 100) : 0;
+  g('sk-rat').innerText   = flowInc > 0 ? `${dr.toFixed(1)}%` : '—';
+  g('sk-rat').style.color = dr > 50 ? 'var(--red)' : dr > 30 ? 'var(--orange)' : 'var(--green)';
+
+  const hasData = totalExp > 0 || flowInc > 0;
+  g('sk-empty').style.display   = hasData ? 'none'  : 'block';
+  g('sankey_chart').style.display = hasData ? 'block' : 'none';
+  if (hasData) renderSVGFlow(g('sankey_chart'), flowInc, flowExp, net);
+}
+
+function renderSVGFlow(container, income, expMap, net) {
+  const W = container.clientWidth || 600;
+  const H = 310;
+  const items = Object.entries(expMap).filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a);
+  if (net > 0) items.push(['💰 Unspent', net]);
+  if (!items.length) { container.innerHTML = ''; return; }
+
+  const total = items.reduce((s, [, v]) => s + v, 0);
+  const PAL = ['#e74c3c','#e67e22','#9b59b6','#1abc9c','#f39c12','#16a085','#e91e63','#8e44ad','#3498db'];
+
+  const PAD_Y = 14, GAP = Math.max(4, Math.floor(8 - items.length * 0.5));
+  const NODE_W = 12, LABEL_W = Math.min(210, W * 0.38);
+  const LEFT_X = NODE_W + 4, RIGHT_X = W - NODE_W - LABEL_W;
+
+  const usableH = H - PAD_Y * 2, totalGaps = GAP * (items.length - 1);
+  const rNodes = [];
+  let rY = PAD_Y;
+  items.forEach(([name, val], i) => {
+    const h = Math.max((val / total) * (usableH - totalGaps), 4);
+    rNodes.push({ name, val, y: rY, h, color: PAL[i % PAL.length] });
+    rY += h + GAP;
+  });
+
+  const incH = rNodes.reduce((s, n) => s + n.h, 0) + GAP * Math.max(0, rNodes.length - 1);
+  const cx   = LEFT_X + NODE_W + (RIGHT_X - LEFT_X - NODE_W) * 0.55; 
+
+  const p = []; 
+  p.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px;display:block;overflow:visible;">`);
+
+  let lY = PAD_Y;
+  rNodes.forEach(node => {
+    const p1y = lY, p2y = lY + node.h, p3y = node.y, p4y = node.y + node.h;
+    p.push(`<path d="M${LEFT_X+NODE_W},${p1y} C${cx},${p1y} ${cx},${p3y} ${RIGHT_X},${p3y} L${RIGHT_X},${p4y} C${cx},${p4y} ${cx},${p2y} ${LEFT_X+NODE_W},${p2y} Z" fill="${node.color}" opacity="0.22"/>`);
+    lY += node.h + GAP;
+  });
+
+  p.push(`<rect x="${LEFT_X}" y="${PAD_Y}" width="${NODE_W}" height="${incH}" fill="#3498db" rx="3"/>`);
+  const lmx = LEFT_X + NODE_W / 2, lmy = PAD_Y + incH / 2;
+  if (incH > 28) {
+    p.push(`<text transform="rotate(-90,${lmx},${lmy})" x="${lmx}" y="${lmy + 4}" text-anchor="middle" fill="#fff" font-size="10" font-family="Segoe UI,sans-serif" font-weight="600">Income</text>`);
+  }
+  const incLabel = income > 0 ? jpy(income) : jpy(total);
+  p.push(`<text x="${lmx}" y="${PAD_Y + incH + 13}" text-anchor="middle" fill="#8b949e" font-size="9.5" font-family="Segoe UI,sans-serif">${incLabel}</text>`);
+
+  rNodes.forEach(node => {
+    p.push(`<rect x="${RIGHT_X}" y="${node.y}" width="${NODE_W}" height="${node.h}" fill="${node.color}" rx="3"/>`);
+    const ty = node.y + node.h / 2 + 4;
+    const maxC = Math.floor(LABEL_W / 6.2);                   
+    const name = node.name.length > maxC ? node.name.slice(0, maxC - 1) + '…' : node.name;
+    if (node.h >= 10) p.push(`<text x="${RIGHT_X + NODE_W + 7}" y="${ty}" fill="#cdd9e5" font-size="10.5" font-family="Segoe UI,sans-serif">${name}</text>`);
+    if (node.h >= 20) p.push(`<text x="${RIGHT_X + NODE_W + 7}" y="${ty + 12}" fill="#8b949e" font-size="9.5" font-family="Segoe UI,sans-serif">${jpy(node.val)}</text>`);
+  });
+
+  p.push('</svg>');
+  container.innerHTML = p.join('');
+}
+
+// ═══════════════════════════════════════════════
+// HISTORY
+// ═══════════════════════════════════════════════
+function showMore(){histLim+=20;renderHist();}
+function renderHist(){
+  const ft=g('hf-t').value,srch=g('hf-s').value.toLowerCase(),mOnly=g('hf-m').checked;
+  const todayEOD=new Date();todayEOD.setHours(23,59,59,999);
+  let list=[...entries].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  if(ft)list=list.filter(e=>e.type===ft);
+  if(srch)list=list.filter(e=>(e.label||'').toLowerCase().includes(srch));
+  if(mOnly){const mS=new Date(vY,vM,1),mE=new Date(vY,vM+1,0,23,59,59);list=list.filter(e=>{const d=new Date(e.date+'T00:00:00');return d>=mS&&d<=mE;});}
+  const hl=g('h-list');hl.innerHTML='';
+  list.slice(0,histLim).forEach(e=>{
+    const isFut=new Date(e.date+'T00:00:00')>todayEOD;
+    const rate=e.purchaseRate||eurRate,val=e.currency==='EUR'?e.amount*rate:e.amount;
+    const dAmt=e.currency==='EUR'?`€${Math.abs(e.amount).toLocaleString()}`:`¥${Math.abs(e.amount).toLocaleString()}`;
+    let cls=e.amount>0?'inc':'exp';
+    if(e.type==='Current Cash Setup')cls='ast';
+    if(isFut)cls='upc';
+    const li=document.createElement('li');li.className=`hi ${cls}`;
+    const bd=getBillDate(e);
+    const badges=[];
+    if(isFut)badges.push(`<span class="bdg b-pu">UPCOMING</span>`);
+    if(bd&&bd>todayEOD)badges.push(`<span class="bdg b-or">Due ${fmt(bd)}</span>`);
+    if(e.ccType)badges.push(`<span class="bdg b-bl">${e.ccType}</span>`);
+    li.innerHTML=`<div class="hi-l">
+      <div class="hi-t">${e.label||'—'}</div>
+      <div class="hi-m"><span>${e.date}</span><span class="muted">${e.type}</span>${badges.join('')}</div>
+    </div>
+    <div class="hi-r">
+      <div class="hi-a ${val>0?'green':'red'}">${val>0?'+':'−'}${dAmt}</div>
+      <div class="hi-b">
+        <button class="bsm born" onclick="triggerEdit(${e.id})">✏️</button>
+        <button class="bsm bred" onclick="delEntry(${e.id})">✕</button>
+      </div>
+    </div>`;
+    hl.appendChild(li);
+  });
+  g('more-btn').style.display=list.length>histLim?'block':'none';
+}
+</script>
+</body>
+</html>
