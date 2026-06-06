@@ -1482,7 +1482,7 @@ function currentPayCycle(ref){
 }
 // income + spending (cash by date, card by bill date) within a date window
 function computeCycle(start,end){
-  let income=0,spent=0;
+  let income=0,spent=0,cashSub=0;const bills=[];
   for(const e of entries){
     if(!e.date)continue;
     const ed=new Date(e.date+'T00:00:00');
@@ -1492,12 +1492,12 @@ function computeCycle(start,end){
       if(ed>=start&&ed<=end)income+=val;
     } else if(e.type==='Credit Card'||e.type==='Existing Debt Setup'){
       const bd=getBillDate(e);
-      if(bd&&bd>=start&&bd<=end)spent+=Math.abs(val);
+      if(bd&&bd>=start&&bd<=end){spent+=Math.abs(val);bills.push({label:e.label||'?',amt:Math.abs(val),due:bd,cc:e.ccType});}
     } else if(e.type!=='Current Cash Setup'&&e.type!=='Investment'){
-      if(ed>=start&&ed<=end)spent+=Math.abs(val);
+      if(ed>=start&&ed<=end){spent+=Math.abs(val);cashSub+=Math.abs(val);}
     }
   }
-  return {income,spent};
+  return {income,spent,cashSub,bills};
 }
 // unpaid CASH recurring whose due date falls within the window (card-paid excluded — billed later)
 function cycleRecUnpaid(start,end){
@@ -2261,8 +2261,14 @@ function renderDashboard(){
   g('c-lwy').innerText=jpy(Math.abs(leeway));
   g('c-lwy').className=`cval ${leeway>=0?'green':'red'}`;
   g('c-lwy-s').innerHTML=`${leeway>=0?'✅ Free to spend':'⚠️ Over budget'} <span class="muted">· cycle ${fmtMD(cyc.start)}–${fmtMD(cyc.end)}</span><br>Base ${jpy(leewayBase)} − Spent ${jpy(cd.spent)} − Recurring left ${jpy(recCyc.cash)}`+
-    (recCyc.card>0?`<br><span style="color:var(--muted);">(+ ${jpy(recCyc.card)} on cards, billed later)</span>`:'')+
-    `<br><span style="font-size:.62rem;color:var(--muted);cursor:pointer;" onclick="adjustPayday()">📅 payday ${fmtMD(cyc.start)} — tap if a holiday shifted it</span>`;
+    (recCyc.card>0?`<br><span style="color:var(--muted);">(+ ${jpy(recCyc.card)} on cards, billed later)</span>`:'');
+  if(cd.spent>0){
+    let bd='<div style="font-size:.64rem;color:var(--muted);margin-top:4px;line-height:1.55;">Spent breakdown:';
+    if(cd.cashSub>0)bd+=`<br>• Cash / direct — ${jpy(cd.cashSub)}`;
+    cd.bills.forEach(b=>{bd+=`<br>• ${esc(b.label)} — ${jpy(b.amt)} <span style="opacity:.8;">(${esc(b.cc||'card')} bill, due ${fmtMD(b.due)})</span>`;});
+    g('c-lwy-s').innerHTML+=bd+'</div>';
+  }
+  g('c-lwy-s').innerHTML+=`<br><span style="font-size:.62rem;color:var(--muted);cursor:pointer;" onclick="adjustPayday()">📅 payday ${fmtMD(cyc.start)} — tap if a holiday shifted it</span>`;
   if(leeway>0&&TODAY>=cyc.start&&TODAY<=cyc.end){
     const daysLeft=Math.max(1,Math.ceil((cyc.next-TODAY)/86400000));
     g('c-lwy-s').innerHTML+=`<br><strong style="color:var(--green);">≈ ${jpy(leeway/daysLeft)}/day</strong> for ${daysLeft} day${daysLeft>1?'s':''} until payday (${fmtMD(cyc.next)})`;
@@ -2294,9 +2300,14 @@ function buildCCBrk(ents){
     const rate=e.purchaseRate||eurRate,val=e.currency==='EUR'?Math.abs(e.amount)*rate:Math.abs(e.amount);
     const amtStr=e.currency==='EUR'?`€${Math.abs(e.amount).toLocaleString()} (${jpy(val)})`:jpy(val);
     const bd=getBillDate(e);
-    const meta=e._projected?`(🔁 scheduled ${e.date}${bd?', bills '+fmt(bd):''})`:`(bought ${e.date}${bd?', due '+fmt(bd):''})`;
-    const op=e._projected?'opacity:.7;font-style:italic;':'';
-    return`<div class="cc-row" style="${op}"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;color:var(--text);">${e.label||'?'} <span class="muted" style="font-size:.65rem;">${meta}</span></span><span style="flex-shrink:0;color:var(--red);">${amtStr}</span></div>`;
+    const iso=d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';
+    const when=e._projected?`🔁 upcoming ${e.date}`:`bought ${e.date}`;
+    const meta=`${when}${bd?` · due ${iso(bd)}`:''}`;
+    const op=e._projected?'opacity:.78;':'';
+    return`<div class="cc-row" style="flex-direction:column;align-items:stretch;gap:2px;${op}">`+
+      `<div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:var(--text);${e._projected?'font-style:italic;':''}overflow-wrap:anywhere;min-width:0;">${esc(e.label||'?')}</span><span style="flex-shrink:0;color:var(--red);">${amtStr}</span></div>`+
+      `<div class="muted" style="font-size:.64rem;overflow-wrap:anywhere;">${meta}</div>`+
+    `</div>`;
   }).join('');
 }
 
