@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>Personal Finance Tracker v3.1</title>
+<title>Personal Finance Tracker v3.2</title>
 <style>
 /* ═══════════════════════════════════════
    DESIGN TOKENS
@@ -1707,21 +1707,68 @@ function renderRMList(){
 // ═══════════════════════════════════════════════
 // HOLDINGS CRUD
 // ═══════════════════════════════════════════════
+// ── Robust market-price fetch: timeout + several fallback proxies ──
+function fetchWithTimeout(u,ms){
+  const c=new AbortController();const t=setTimeout(()=>c.abort(),ms||8000);
+  return fetch(u,{signal:c.signal}).finally(()=>clearTimeout(t));
+}
+// Preferred path: fetch prices through YOUR Apps Script (Google's servers — no proxy, no cache).
+// Returns {ticker:{price,prevClose}} or null if the script isn't set up / fails.
+async function scriptPrices(tickers){
+  if(!urlOk()||!tickers.length)return null;
+  try{
+    const res=await fetchWithTimeout(gurl('prices='+encodeURIComponent(tickers.join(','))),12000);
+    const data=await res.json();
+    if(data&&data.prices&&typeof data.prices==='object')return data.prices;
+  }catch(e){}
+  return null;
+}
+async function yahooQuote(ticker){
+  const y=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5d&_=${Date.now()}`;
+  const attempts=[
+    {u:`https://api.allorigins.win/raw?url=${encodeURIComponent(y)}`,wrap:false},
+    {u:`https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(y)}`,wrap:false},
+    {u:`https://corsproxy.io/?url=${encodeURIComponent(y)}`,wrap:false},
+    {u:`https://api.allorigins.win/get?url=${encodeURIComponent(y)}`,wrap:true}
+  ];
+  let lastErr;
+  for(const a of attempts){
+    try{
+      const res=await fetchWithTimeout(a.u,8000);
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      const text=await res.text();
+      const json=a.wrap?JSON.parse(JSON.parse(text).contents):JSON.parse(text);
+      const meta=json.chart.result[0].meta;
+      const price=meta.regularMarketPrice;
+      const prev=meta.chartPreviousClose||meta.previousClose||price;
+      if(!price)throw new Error('no price');
+      return {price,prevClose:prev};
+    }catch(e){lastErr=e;}
+  }
+  throw lastErr||new Error('all proxies failed');
+}
+// Resolve prices for a list of tickers: own script first, proxies fill any gaps.
+async function getPrices(tickers){
+  const out=(await scriptPrices(tickers))||{};
+  const missing=tickers.filter(t=>!out[t]);
+  if(missing.length){
+    const fb=await Promise.allSettled(missing.map(t=>yahooQuote(t)));
+    fb.forEach((r,i)=>{if(r.status==='fulfilled')out[missing[i]]=r.value;});
+  }
+  return out;
+}
 async function fetchHoldPrice(){
   const ticker=document.getElementById('h-tick').value.trim();
   if(!ticker){alert("Enter a ticker symbol first (e.g. 2558.T)");return;}
   const btn=document.getElementById('h-fetch-btn');btn.innerText="⏳";
   try{
-    const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
-    const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const res=await fetch(proxy);const data=await res.json();
-    const parsed=JSON.parse(data.contents);
-    const price=parsed.chart.result[0].meta.regularMarketPrice;
-    document.getElementById('h-cur').value=price.toFixed(0);
+    const p=await getPrices([ticker]);const q=p[ticker];
+    if(!q)throw new Error('no price');
+    document.getElementById('h-cur').value=q.price.toFixed(0);
     btn.innerText="✅";setTimeout(()=>btn.innerText="🔄 Fetch Price",2500);
   }catch(err){
     btn.innerText="❌ Failed";setTimeout(()=>btn.innerText="🔄 Fetch Price",2500);
-    alert("Could not fetch price. Try updating manually, or check the ticker symbol.");
+    alert("Could not fetch price right now. Try again in a moment, or enter it manually.");
   }
 }
 function saveHolding(){
@@ -1762,20 +1809,15 @@ function delHolding(id){
 }
 async function refreshAllPrices(){
   const btn=document.getElementById('h-refresh-all');if(btn)btn.innerText="⏳ Refreshing…";
-  for(const h of holdings){
-    if(!h.ticker)continue;
-    try{
-      const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(h.ticker)}?interval=1d&range=1d`;
-      const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-      const res=await fetch(proxy);const data=await res.json();
-      const parsed=JSON.parse(data.contents);
-      const price=parsed.chart.result[0].meta.regularMarketPrice;
-      h.currentPrice=price;h.lastUpdated=new Date().toISOString().split('T')[0];
-    }catch{}
-  }
+  const targets=holdings.filter(h=>h.ticker);
+  const today=new Date().toISOString().split('T')[0];
+  const prices=await getPrices(targets.map(h=>h.ticker));
+  let ok=0;
+  targets.forEach(h=>{const q=prices[h.ticker];if(q){h.currentPrice=q.price;h.lastUpdated=today;ok++;}});
   persist();
   renderHoldingsList();renderDashboard();
   if(btn)btn.innerText="🔄 Refresh All";
+  if(targets.length&&ok<targets.length)alert(`Updated ${ok} of ${targets.length}. Couldn't reach some quotes — try again in a moment.`);
 }
 function renderHoldingsList(){
   const c=document.getElementById('hold-list');
@@ -1820,14 +1862,7 @@ function renderHoldingsList(){
 // LIVE TRACKED INVESTMENTS  (auto units, no manual entry)
 // ═══════════════════════════════════════════════
 async function fetchTickerPrice(ticker){
-  const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5d`;
-  const proxy=`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-  const res=await fetch(proxy);const data=await res.json();
-  const meta=JSON.parse(data.contents).chart.result[0].meta;
-  const price=meta.regularMarketPrice;
-  const prev=meta.chartPreviousClose||meta.previousClose||price;
-  if(!price)throw new Error('no price');
-  return {price,prevClose:prev};
+  return yahooQuote(ticker);
 }
 // match a logged Investment entry to a tracked instrument by its keyword
 function matchTracked(label){
@@ -1852,14 +1887,14 @@ function invSummary(inst){
 }
 async function refreshTracked(){
   const btn=g('inv-refresh');if(btn)btn.innerText='⏳ Fetching…';
+  const targets=trackedInv.filter(t=>t.ticker);
+  const today=new Date().toISOString().split('T')[0];
+  const prices=await getPrices(targets.map(t=>t.ticker));
   let ok=0;
-  for(const inst of trackedInv){
-    if(!inst.ticker)continue;
-    try{const r=await fetchTickerPrice(inst.ticker);inst.price=r.price;inst.prevClose=r.prevClose;inst.updated=new Date().toISOString().split('T')[0];ok++;}catch{}
-  }
+  targets.forEach(t=>{const q=prices[t.ticker];if(q){t.price=q.price;t.prevClose=q.prevClose;t.updated=today;ok++;}});
   persist();renderTracked();
   if(btn)btn.innerText='🔄 Refresh Prices';
-  if(!ok&&trackedInv.some(t=>t.ticker))alert("Couldn't reach the price service right now. Try again in a moment, or check the ticker symbols.");
+  if(targets.length&&ok<targets.length)alert(`Updated ${ok} of ${targets.length}. Couldn't reach some quotes — try again in a moment.`);
 }
 function renderTracked(){
   const c=g('inv-list');if(!c)return;
