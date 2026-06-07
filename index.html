@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>Personal Finance Tracker v3.6</title>
+<title>Personal Finance Tracker v3.8</title>
 <style>
 /* ═══════════════════════════════════════
    DESIGN TOKENS
@@ -589,6 +589,17 @@ body.light .hi, body.light .rec-it, body.light .cc-card { background: #fbfcfd; }
     <div class="eur-calc" id="eur-calc">Total Paid: ¥0</div>
   </div>
 
+  <div class="eur-box" id="inv-box" style="display:none;">
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;">
+      <input type="checkbox" id="inv-manual" onchange="document.getElementById('inv-price-wrap').style.display=this.checked?'block':'none';" style="width:auto;">
+      Enter unit price by hand
+    </label>
+    <div id="inv-price-wrap" style="display:none;margin-top:6px;">
+      <input type="number" id="inv-price" step="any" placeholder="price per unit/share, e.g. 18783">
+      <div class="muted" style="font-size:.66rem;margin-top:3px;">Used instead of the auto-fetched price. Units = amount ÷ this price. Leave unchecked to fetch automatically.</div>
+    </div>
+  </div>
+
   <div class="fg">
     <label>Date <span class="ftag" id="ftag">📅 Future Entry</span></label>
     <input type="date" id="date" onchange="onDateChange()">
@@ -986,7 +997,7 @@ body.light .hi, body.light .rec-it, body.light .cc-card { background: #fbfcfd; }
 // ═══════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════
-const DEFAULT_CLOUD_URL = "PUT-YOUR-API-HERE";
+const DEFAULT_CLOUD_URL = "https://script.google.com/macros/s/AKfycbyE2H0IvtXEeH-1DizEhG5Mr9cX21kGbmbrem7FCIgHkzC10hCz2zz-HVGx-4hOkoPC/exec";
 let CLOUD_URL = localStorage.getItem('financeTrackerCloudUrl') || DEFAULT_CLOUD_URL;
 let cloudToken = localStorage.getItem('financeTrackerToken') || '';
 // ═══════════════════════════════════════════════
@@ -1108,7 +1119,13 @@ function updMNav(){
 function handleTypeChange(){
   const t=document.getElementById('type').value;
   document.getElementById('cc-box').style.display=(t==='Credit Card'||t==='Existing Debt Setup')?'block':'none';
-  toggleEur();updateCCPre();
+  toggleEur();updateCCPre();showInvBox();
+}
+function showInvBox(){
+  const t=document.getElementById('type').value, cur=document.getElementById('currency').value;
+  const show=(t==='Investment'&&cur!=='EUR');
+  document.getElementById('inv-box').style.display=show?'block':'none';
+  if(!show){document.getElementById('inv-manual').checked=false;document.getElementById('inv-price-wrap').style.display='none';document.getElementById('inv-price').value='';}
 }
 function onDateChange(){
   const eod=new Date();eod.setHours(23,59,59,999);
@@ -1122,6 +1139,7 @@ function toggleEur(){
   document.getElementById('eur-box').style.display=show?'block':'none';
   if(show&&!document.getElementById('pur-rate').value)document.getElementById('pur-rate').value=eurRate;
   if(show)calcEur();
+  showInvBox();
 }
 function calcEur(){
   const a=parseFloat(document.getElementById('amount').value)||0,r=parseFloat(document.getElementById('pur-rate').value)||0;
@@ -1190,21 +1208,30 @@ async function addEntry(){
   const pRate=(cur==='EUR'&&!isAsset)?(parseFloat(document.getElementById('pur-rate').value)||eurRate):null;
   const entry={id:editId||Date.now(),type,label:lbl,amount:amt,currency:cur,purchaseRate:pRate,date,ccType,billingCycle:calcBillCycle(date,ccType)};
 
-  // ── auto-capture price + units for a tracked investment (so you never type units) ──
+  // ── price + units for a tracked investment ──
   if(type==='Investment'&&cur!=='EUR'){
-    const inst=matchTracked(lbl);
-    if(inst&&inst.ticker){
-      const sb=document.getElementById('sub-btn');const old=sb.innerText;sb.innerText='⏳ Pricing…';sb.disabled=true;
-      let px=null;
-      try{const r=await fetchTickerPrice(inst.ticker);px=r.price;inst.price=r.price;inst.prevClose=r.prevClose;inst.updated=new Date().toISOString().split('T')[0];}
-      catch{px=inst.price||null;}                       // fall back to last known price
-      if(px&&px>0){entry.unitPrice=px;entry.units=Math.abs(amt)/px;}
-      sb.disabled=false;sb.innerText=old;
+    const manualOn=document.getElementById('inv-manual').checked;
+    const manualPx=parseFloat(document.getElementById('inv-price').value);
+    if(manualOn&&manualPx>0){
+      entry.unitPrice=manualPx;entry.units=Math.abs(amt)/manualPx;   // use the hand-entered NAV/price
+    } else {
+      const inst=matchTracked(lbl);
+      if(inst&&inst.ticker){
+        const sb=document.getElementById('sub-btn');const old=sb.innerText;sb.innerText='⏳ Pricing…';sb.disabled=true;
+        let px=null;
+        try{const r=await fetchTickerPrice(inst.ticker);px=r.price;inst.price=r.price;inst.prevClose=r.prevClose;inst.updated=new Date().toISOString().split('T')[0];}
+        catch{px=inst.price||null;}                       // fall back to last known price
+        if(px&&px>0){entry.unitPrice=px;entry.units=Math.abs(amt)/px;}
+        sb.disabled=false;sb.innerText=old;
+      }
     }
   }
 
   if(editId){entries[entries.findIndex(e=>e.id===editId)]=entry;cancelEdit();}
   else entries.push(entry);
+  document.getElementById('inv-manual').checked=false;
+  document.getElementById('inv-price-wrap').style.display='none';
+  document.getElementById('inv-price').value='';
   saveRender();
 }
 function triggerEdit(id){
@@ -1745,48 +1772,46 @@ function priceProxies(targetUrl){
     `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`
   ];
 }
+// Fire all proxies AT ONCE; resolve with the first that returns a valid parse.
+// A dead/403/slow proxy no longer blocks the others (that was the slowdown).
+function fetchFirst(urls,ms,parse){
+  return new Promise((resolve,reject)=>{
+    let pending=urls.length,done=false;
+    if(!pending)return reject(new Error('no urls'));
+    urls.forEach(u=>{
+      fetchWithTimeout(u,ms)
+        .then(r=>r.ok?r.text():Promise.reject())
+        .then(text=>{
+          if(done)return;
+          let val=null;try{val=parse(text,u);}catch(e){val=null;}
+          if(val&&!done){done=true;resolve(val);}else throw 0;
+        })
+        .catch(()=>{})
+        .finally(()=>{if(--pending===0&&!done)reject(new Error('all proxies failed'));});
+    });
+  });
+}
 async function yahooQuote(ticker){
   const y=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5d&_=${Date.now()}`;
-  const urls=priceProxies(y);
-  let lastErr;
-  for(let i=0;i<urls.length;i++){
-    try{
-      const res=await fetchWithTimeout(urls[i],8000);
-      if(!res.ok)throw new Error('HTTP '+res.status);
-      const text=await res.text();
-      const wrap=urls[i].indexOf('/get?')>=0;
-      const json=wrap?JSON.parse(JSON.parse(text).contents):JSON.parse(text);
-      const meta=json.chart.result[0].meta;
-      const price=meta.regularMarketPrice;
-      const prev=meta.chartPreviousClose||meta.previousClose||price;
-      if(!price)throw new Error('no price');
-      return {price,prevClose:prev};
-    }catch(e){lastErr=e;}
-  }
-  throw lastErr||new Error('all proxies failed');
+  return fetchFirst(priceProxies(y),7000,(text,u)=>{
+    const json=u.indexOf('/get?')>=0?JSON.parse(JSON.parse(text).contents):JSON.parse(text);
+    const meta=json.chart.result[0].meta,price=meta.regularMarketPrice;
+    return price?{price,prevClose:meta.chartPreviousClose||meta.previousClose||price}:null;
+  });
 }
 // Japanese mutual-fund NAV (基準価額) — fetched in the BROWSER via proxy + minkabu page.
 async function fundQuote(code){
   code=String(code);if(/^\d{7}$/.test(code))code='0'+code;
   const page=`https://itf.minkabu.jp/fund/${code}`;
-  const urls=priceProxies(page);
-  let lastErr;
-  for(let i=0;i<urls.length;i++){
-    try{
-      const res=await fetchWithTimeout(urls[i],10000);
-      if(!res.ok)throw new Error('HTTP '+res.status);
-      let html=await res.text();
-      if(urls[i].indexOf('/get?')>=0){try{html=JSON.parse(html).contents;}catch(e){}}
-      const m=html.match(/基準価額([\d,]+(?:\.\d+)?)円、前日比([+\-＋－−]?[\d,]+(?:\.\d+)?)/);
-      if(!m)throw new Error('NAV not found');
-      const price=parseFloat(m[1].replace(/,/g,''));
-      let chg=parseFloat(m[2].replace(/,/g,'').replace('＋','').replace(/[－−]/,'-'));
-      if(isNaN(chg))chg=0;
-      if(!price)throw new Error('no price');
-      return {price,prevClose:price-chg};
-    }catch(e){lastErr=e;}
-  }
-  throw lastErr||new Error('fund fetch failed');
+  return fetchFirst(priceProxies(page),9000,(text,u)=>{
+    let html=text;if(u.indexOf('/get?')>=0){try{html=JSON.parse(text).contents;}catch(e){}}
+    const m=html.match(/基準価額([\d,]+(?:\.\d+)?)円、前日比([+\-＋－−]?[\d,]+(?:\.\d+)?)/);
+    if(!m)return null;
+    const price=parseFloat(m[1].replace(/,/g,''));
+    let chg=parseFloat(m[2].replace(/,/g,'').replace('＋','').replace(/[－−]/,'-'));
+    if(isNaN(chg))chg=0;
+    return price?{price,prevClose:price-chg}:null;
+  });
 }
 // Resolve prices in the browser: funds via fund page, stocks via Yahoo — all parallel.
 async function getPrices(tickers){
@@ -1875,11 +1900,13 @@ function renderHoldingsList(){
   </div>`+holdings.map(h=>{
     const inv=h.units*h.avgBuyPrice,mkt=h.units*h.currentPrice,pnl=mkt-inv,pct2=inv>0?(pnl/inv*100).toFixed(1):0;
     const chg=h.currentPrice-h.avgBuyPrice,chgPct=h.avgBuyPrice>0?(chg/h.avgBuyPrice*100).toFixed(1):0;
+    const hStale=h.lastUpdated?Math.floor((TODAY-new Date(h.lastUpdated+'T00:00:00'))/86400000):null;
+    const upStr=h.lastUpdated?`<span style="color:${hStale>4?'var(--orange)':'inherit'};">Last updated: ${h.lastUpdated}${hStale>4?` (${hStale}d old)`:''}</span>`:'Last updated: —';
     return`<div class="hl-it">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
           <div class="hl-n">${h.name}</div>
-          <div class="hl-m">${h.account}${h.ticker?' · '+h.ticker:''} · Last updated: ${h.lastUpdated||'—'}</div>
+          <div class="hl-m">${h.account}${h.ticker?' · '+h.ticker:''} · ${upStr}</div>
         </div>
         <div style="display:flex;gap:3px;">
           <button class="bsm born" onclick="editHold(${h.id})">✏️</button>
@@ -1902,7 +1929,7 @@ function renderHoldingsList(){
 // LIVE TRACKED INVESTMENTS  (auto units, no manual entry)
 // ═══════════════════════════════════════════════
 async function fetchTickerPrice(ticker){
-  return yahooQuote(ticker);
+  return /^\d{7,8}$/.test(String(ticker))?fundQuote(ticker):yahooQuote(ticker);
 }
 // match a logged Investment entry to a tracked instrument by its keyword
 function matchTracked(label){
@@ -1947,6 +1974,12 @@ function renderTracked(){
     const dc=(hasP&&inst.prevClose)?((inst.price-inst.prevClose)/inst.prevClose*100):null;
     const dcStr=dc==null?'<span class="muted" style="font-size:.78rem;">—</span>':`<span style="color:${dc>=0?'var(--green)':'var(--red)'};font-size:.82rem;font-weight:600;">${dc>=0?'▲':'▼'} ${Math.abs(dc).toFixed(2)}%</span>`;
     const gainStr=s.invested?` <span style="color:${s.gain>=0?'var(--green)':'var(--red)'};">(${s.gain>=0?'+':''}${jpy(s.gain)} · ${s.gain>=0?'+':''}${s.pct.toFixed(1)}%)</span>`:'';
+    let asOf='<span style="color:var(--muted);">not fetched yet</span>';
+    if(inst.updated){
+      const days=Math.floor((TODAY-new Date(inst.updated+'T00:00:00'))/86400000);
+      const stale=days>4;
+      asOf=`<span style="color:${stale?'var(--orange)':'var(--muted)'};">🕒 as of ${inst.updated}${stale?` (${days}d old)`:''}</span>`;
+    }
     return `<div class="card" style="padding:13px;">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
         <div class="hl-n" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(inst.name)}</div>
@@ -1956,6 +1989,7 @@ function renderTracked(){
         <div style="font-size:1.2rem;font-weight:700;">${hasP?'¥'+inst.price.toLocaleString(undefined,{maximumFractionDigits:1}):'—'}</div>
         ${dcStr}
       </div>
+      <div style="font-size:.6rem;margin-top:2px;">${asOf}</div>
       <div class="cdet" style="margin-top:8px;line-height:1.75;">
         Invested: <strong>${jpy(s.invested)}</strong><br>
         Shares/Units: <strong>${s.units?s.units.toLocaleString(undefined,{maximumFractionDigits:3}):'—'}</strong><br>
