@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>Personal Finance Tracker v3.2</title>
+<title>Personal Finance Tracker v3.3</title>
 <style>
 /* ═══════════════════════════════════════
    DESIGN TOKENS
@@ -945,7 +945,7 @@ body.light .hi, body.light .rec-it, body.light .cc-card { background: #fbfcfd; }
       <div><label>Current Price (¥)</label><input type="number" id="h-cur" step="any" placeholder="16500"></div>
     </div>
     <div class="r2" style="gap:7px;margin-bottom:10px;">
-      <div style="flex:2;"><label>Ticker for Auto-Fetch (optional)</label><input type="text" id="h-tick" placeholder="2558.T / SPY / 1321.T"></div>
+      <div style="flex:2;"><label>Ticker for Auto-Fetch (optional)</label><input type="text" id="h-tick" placeholder="2558.T / SPY / 01311237 (fund)"></div>
       <div style="flex:1;display:flex;flex-direction:column;">
         <label>&nbsp;</label>
         <button onclick="fetchHoldPrice()" style="background:var(--accent);padding:7px;font-size:.8rem;" id="h-fetch-btn">🔄 Fetch Price</button>
@@ -986,7 +986,7 @@ body.light .hi, body.light .rec-it, body.light .cc-card { background: #fbfcfd; }
 // ═══════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════
-const DEFAULT_CLOUD_URL = "PLACE-THE-API-LINK-HERE";
+const DEFAULT_CLOUD_URL = "https://script.google.com/macros/s/AKfycbyE2H0IvtXEeH-1DizEhG5Mr9cX21kGbmbrem7FCIgHkzC10hCz2zz-HVGx-4hOkoPC/exec";
 let CLOUD_URL = localStorage.getItem('financeTrackerCloudUrl') || DEFAULT_CLOUD_URL;
 let cloudToken = localStorage.getItem('financeTrackerToken') || '';
 // ═══════════════════════════════════════════════
@@ -1748,9 +1748,10 @@ async function yahooQuote(ticker){
   throw lastErr||new Error('all proxies failed');
 }
 // Resolve prices for a list of tickers: own script first, proxies fill any gaps.
+// (8-digit fund codes are NAV-only via the script — proxies/Yahoo can't serve them.)
 async function getPrices(tickers){
   const out=(await scriptPrices(tickers))||{};
-  const missing=tickers.filter(t=>!out[t]);
+  const missing=tickers.filter(t=>!out[t]&&!/^\d{7,8}$/.test(t));
   if(missing.length){
     const fb=await Promise.allSettled(missing.map(t=>yahooQuote(t)));
     fb.forEach((r,i)=>{if(r.status==='fulfilled')out[missing[i]]=r.value;});
@@ -1940,10 +1941,10 @@ function renderInvCfg(){
   const c=g('inv-cfg-list');if(!c)return;
   c.innerHTML=trackedInv.map(t=>`<div class="exp-row" style="gap:6px;align-items:center;">
       <input value="${esc(t.name)}" placeholder="Name" onchange="updTracked(${t.id},'name',this.value)" style="flex:2;">
-      <input value="${esc(t.ticker||'')}" placeholder="Ticker (2558.T)" onchange="updTracked(${t.id},'ticker',this.value)" style="flex:1.5;">
+      <input value="${esc(t.ticker||'')}" placeholder="2558.T or fund code" onchange="updTracked(${t.id},'ticker',this.value)" style="flex:1.5;">
       <input value="${esc(t.keyword||'')}" placeholder="Label match" onchange="updTracked(${t.id},'keyword',this.value)" style="flex:1.5;">
       <button class="bsm bred" onclick="delTracked(${t.id})">✕</button>
-    </div>`).join('')||'<div class="muted" style="font-size:.82rem;">None yet.</div>';
+    </div>`).join('')+`<div class="muted" style="font-size:.66rem;margin-top:6px;line-height:1.5;">Ticker: stocks/ETFs use a Yahoo symbol (e.g. <b>2558.T</b>). 投資信託 use the 8-digit 協会コード (e.g. <b>01311237</b> = はじめてのNISA S&P500, <b>01313237</b> = 日経225). Fund NAV updates once daily (evening JST). Label match = a word in your logged entry, e.g. “S&P500”.</div>`;
 }
 function updTracked(id,field,val){const t=trackedInv.find(x=>x.id===id);if(!t)return;t[field]=val.trim();persist();renderTracked();}
 function addTracked(){trackedInv.push({id:Date.now(),name:'New Instrument',ticker:'',keyword:'',price:null,prevClose:null,updated:null});persist();renderInvCfg();renderTracked();}
