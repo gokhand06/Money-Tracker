@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>Personal Finance Tracker v3.5</title>
+<title>Personal Finance Tracker v3.6</title>
 <style>
 /* ═══════════════════════════════════════
    DESIGN TOKENS
@@ -629,7 +629,7 @@ body.light .hi, body.light .rec-it, body.light .cc-card { background: #fbfcfd; }
     <h1>💴 Financial Workspace</h1>
     <div class="hbtns">
       <span id="sync-status" onclick="pushAll()" title="Tap to push everything to the cloud now" style="font-size:.72rem;padding:4px 9px;border-radius:20px;cursor:pointer;background:#2a2f3a;color:var(--muted);white-space:nowrap;align-self:center;">☁️ —</span>
-      <button class="bgrn" id="sync-btn" onclick="syncCloud()">☁️ Sync</button>
+      <button class="bgrn" id="sync-btn" onclick="syncAndRefresh()">☁️ Sync</button>
       <button class="bpur" onclick="toggleTheme()" id="theme-btn" title="Toggle light / dark">🌙</button>
       <button class="bpur" onclick="openCloud()">⚙️ Cloud</button>
       <button class="bpur" onclick="openReports()">📊 Reports</button>
@@ -986,7 +986,7 @@ body.light .hi, body.light .rec-it, body.light .cc-card { background: #fbfcfd; }
 // ═══════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════
-const DEFAULT_CLOUD_URL = "https://script.google.com/macros/s/AKfycbyE2H0IvtXEeH-1DizEhG5Mr9cX21kGbmbrem7FCIgHkzC10hCz2zz-HVGx-4hOkoPC/exec";
+const DEFAULT_CLOUD_URL = "PUT-YOUR-API-HERE";
 let CLOUD_URL = localStorage.getItem('financeTrackerCloudUrl') || DEFAULT_CLOUD_URL;
 let cloudToken = localStorage.getItem('financeTrackerToken') || '';
 // ═══════════════════════════════════════════════
@@ -1344,6 +1344,28 @@ async function syncCloud(){
     buildTplUI();renderRMList();renderDashboard();setSyncStatus('saved');
     btn.innerText="☁️ Sync";
   }catch(err){btn.innerText="☁️ Sync";setSyncStatus('error');alert("Cloud sync failed: "+err.message+"\n\nOpen ⚙️ Cloud → Test Connection to check your URL/deployment.");}
+}
+// Refresh prices for BOTH tracked instruments and holdings in one pass (browser-side).
+async function refreshMarketPrices(silent){
+  const tT=trackedInv.filter(t=>t.ticker), tH=holdings.filter(h=>h.ticker);
+  const all=[...new Set([...tT.map(t=>String(t.ticker)),...tH.map(h=>String(h.ticker))])];
+  if(!all.length)return {ok:0,tot:0};
+  const prices=await getPrices(all);
+  const today=new Date().toISOString().split('T')[0];
+  let ok=0,tot=0;
+  tT.forEach(t=>{tot++;const q=prices[String(t.ticker)];if(q){t.price=q.price;t.prevClose=q.prevClose;t.updated=today;ok++;}});
+  tH.forEach(h=>{tot++;const q=prices[String(h.ticker)];if(q){h.currentPrice=q.price;h.lastUpdated=today;ok++;}});
+  persist();renderTracked();renderHoldingsList();renderDashboard();
+  if(!silent&&tot&&ok<tot)alert(`Updated ${ok} of ${tot} prices — tap again in a moment for the rest.`);
+  return {ok,tot};
+}
+// Sync button: pull the spreadsheet AND fetch fresh prices, in one tap.
+async function syncAndRefresh(){
+  const b=document.getElementById('sync-btn');
+  await syncCloud();
+  if(b)b.innerText="⏳ Prices…";
+  try{ await refreshMarketPrices(true); }catch(e){}
+  if(b)b.innerText="☁️ Sync";
 }
 // ── cloud settings modal ──
 function openCloud(){document.getElementById('cloud-url-inp').value=CLOUD_URL;document.getElementById('cloud-token-inp').value=cloudToken;document.getElementById('cloud-test-out').innerHTML='';document.getElementById('cloud-modal').style.display='flex';}
