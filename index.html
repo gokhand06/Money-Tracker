@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>Personal Finance Tracker v3.3</title>
+<title>Personal Finance Tracker v3.5</title>
 <style>
 /* ═══════════════════════════════════════
    DESIGN TOKENS
@@ -1714,30 +1714,26 @@ function fetchWithTimeout(u,ms){
 }
 // Preferred path: fetch prices through YOUR Apps Script (Google's servers — no proxy, no cache).
 // Returns {ticker:{price,prevClose}} or null if the script isn't set up / fails.
-async function scriptPrices(tickers){
-  if(!urlOk()||!tickers.length)return null;
-  try{
-    const res=await fetchWithTimeout(gurl('prices='+encodeURIComponent(tickers.join(','))),12000);
-    const data=await res.json();
-    if(data&&data.prices&&typeof data.prices==='object')return data.prices;
-  }catch(e){}
-  return null;
+// Fetch via the working public proxies (corsproxy first — proven most reliable here).
+function priceProxies(targetUrl){
+  return [
+    `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+    `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(targetUrl)}`,
+    `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`
+  ];
 }
 async function yahooQuote(ticker){
   const y=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5d&_=${Date.now()}`;
-  const attempts=[
-    {u:`https://api.allorigins.win/raw?url=${encodeURIComponent(y)}`,wrap:false},
-    {u:`https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(y)}`,wrap:false},
-    {u:`https://corsproxy.io/?url=${encodeURIComponent(y)}`,wrap:false},
-    {u:`https://api.allorigins.win/get?url=${encodeURIComponent(y)}`,wrap:true}
-  ];
+  const urls=priceProxies(y);
   let lastErr;
-  for(const a of attempts){
+  for(let i=0;i<urls.length;i++){
     try{
-      const res=await fetchWithTimeout(a.u,8000);
+      const res=await fetchWithTimeout(urls[i],8000);
       if(!res.ok)throw new Error('HTTP '+res.status);
       const text=await res.text();
-      const json=a.wrap?JSON.parse(JSON.parse(text).contents):JSON.parse(text);
+      const wrap=urls[i].indexOf('/get?')>=0;
+      const json=wrap?JSON.parse(JSON.parse(text).contents):JSON.parse(text);
       const meta=json.chart.result[0].meta;
       const price=meta.regularMarketPrice;
       const prev=meta.chartPreviousClose||meta.previousClose||price;
@@ -1747,15 +1743,36 @@ async function yahooQuote(ticker){
   }
   throw lastErr||new Error('all proxies failed');
 }
-// Resolve prices for a list of tickers: own script first, proxies fill any gaps.
-// (8-digit fund codes are NAV-only via the script — proxies/Yahoo can't serve them.)
-async function getPrices(tickers){
-  const out=(await scriptPrices(tickers))||{};
-  const missing=tickers.filter(t=>!out[t]&&!/^\d{7,8}$/.test(t));
-  if(missing.length){
-    const fb=await Promise.allSettled(missing.map(t=>yahooQuote(t)));
-    fb.forEach((r,i)=>{if(r.status==='fulfilled')out[missing[i]]=r.value;});
+// Japanese mutual-fund NAV (基準価額) — fetched in the BROWSER via proxy + minkabu page.
+async function fundQuote(code){
+  code=String(code);if(/^\d{7}$/.test(code))code='0'+code;
+  const page=`https://itf.minkabu.jp/fund/${code}`;
+  const urls=priceProxies(page);
+  let lastErr;
+  for(let i=0;i<urls.length;i++){
+    try{
+      const res=await fetchWithTimeout(urls[i],10000);
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      let html=await res.text();
+      if(urls[i].indexOf('/get?')>=0){try{html=JSON.parse(html).contents;}catch(e){}}
+      const m=html.match(/基準価額([\d,]+(?:\.\d+)?)円、前日比([+\-＋－−]?[\d,]+(?:\.\d+)?)/);
+      if(!m)throw new Error('NAV not found');
+      const price=parseFloat(m[1].replace(/,/g,''));
+      let chg=parseFloat(m[2].replace(/,/g,'').replace('＋','').replace(/[－−]/,'-'));
+      if(isNaN(chg))chg=0;
+      if(!price)throw new Error('no price');
+      return {price,prevClose:price-chg};
+    }catch(e){lastErr=e;}
   }
+  throw lastErr||new Error('fund fetch failed');
+}
+// Resolve prices in the browser: funds via fund page, stocks via Yahoo — all parallel.
+async function getPrices(tickers){
+  const out={};
+  await Promise.allSettled(tickers.map(t=>{
+    const s=String(t);
+    return (/^\d{7,8}$/.test(s)?fundQuote(s):yahooQuote(s)).then(q=>{out[s]=q;}).catch(()=>{});
+  }));
   return out;
 }
 async function fetchHoldPrice(){
