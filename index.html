@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<title>Personal Finance Tracker v3.8</title>
+<title>Personal Finance Tracker v4.0</title>
 <style>
 /* ═══════════════════════════════════════
    DESIGN TOKENS
@@ -585,7 +585,9 @@ body.light .hi, body.light .rec-it, body.light .cc-card { background: #fbfcfd; }
 
   <div class="eur-box" id="eur-box">
     <label>Purchase Rate (¥ per €1)</label>
-    <input type="number" id="pur-rate" step="0.01" placeholder="185.9" oninput="calcEur()">
+    <input type="number" id="pur-rate" step="0.01" placeholder="185.9" oninput="document.getElementById('eur-total').value='';calcEur()">
+    <label style="margin-top:8px;">Exact ¥ paid <span style="font-size:.68rem;color:var(--muted);">(optional — overrides the rate so it matches your statement to the yen)</span></label>
+    <input type="number" id="eur-total" step="1" placeholder="e.g. 15583" oninput="calcEur()">
     <div class="eur-calc" id="eur-calc">Total Paid: ¥0</div>
   </div>
 
@@ -696,6 +698,7 @@ body.light .hi, body.light .rec-it, body.light .cc-card { background: #fbfcfd; }
       <div class="cdet" id="w-holdings-sum" style="display:none;"></div>
       <div style="border-top:1px solid var(--bdr);margin-top:8px;padding-top:7px;font-size:.95rem;">
         Net Worth: <strong id="w-net" style="color:var(--green);">¥0</strong>
+        <div id="w-net-det" class="muted" style="font-size:.62rem;margin-top:2px;"></div>
       </div>
       <button class="bsm" onclick="openHoldingsModal()" style="background:#16a085;width:100%;margin-top:7px;">📈 Holdings</button>
     </div>
@@ -731,6 +734,10 @@ body.light .hi, body.light .rec-it, body.light .cc-card { background: #fbfcfd; }
       <div class="clbl">📆 CC Bill Forecast</div>
       <div class="csub" id="cc-fc" style="font-size:.78rem;line-height:1.6;">—</div>
     </div>
+    <div class="card" id="c-proj-card" style="display:none;">
+      <div class="clbl">🔮 Projected Position <span id="proj-when" class="muted" style="font-size:.7rem;"></span></div>
+      <div class="csub" id="c-proj" style="font-size:.76rem;line-height:1.7;">—</div>
+    </div>
   </div>
 
   <div class="sec">
@@ -761,7 +768,7 @@ body.light .hi, body.light .rec-it, body.light .cc-card { background: #fbfcfd; }
         <option value="purchase">🛒 Monthly by Purchase Date</option>
         <option value="debt-10">💳 Pending 10th Cycle — Amazon/Joyo</option>
         <option value="debt-27">💳 Pending 27th Cycle — PayPay</option>
-        <option value="all">🌐 All-Time Global Flow</option>
+        <option value="all">📊 12-Month Trend (income vs spending)</option>
       </select>
       <div class="sk-m">
         <div class="met"><span class="met-l">Net</span><span class="met-v" id="sk-net">¥0</span></div>
@@ -837,6 +844,9 @@ body.light .hi, body.light .rec-it, body.light .cc-card { background: #fbfcfd; }
     <h3>📈 Net Worth Trend</h3>
     <div id="nw-chart" style="margin-bottom:8px;"></div>
     <div class="exp-row"><button onclick="takeSnapshotNow()" style="background:var(--accent);">📸 Snapshot net worth now</button></div>
+    <div class="hr"></div>
+    <h3>🧾 Spending by Category <span class="muted" style="font-size:.72rem;" id="cat-mo-lbl"></span></h3>
+    <div id="cat-bars" style="margin-bottom:6px;"></div>
     <div class="hr"></div>
     <h3>Export CSV</h3>
     <div class="exp-row"><button onclick="exportCSV('full')" style="background:var(--accent);">Export Full Ledger</button></div>
@@ -1062,7 +1072,7 @@ localStorage.setItem('financeTrackerData',JSON.stringify(entries));
 // ═══════════════════════════════════════════════
 // VIEW STATE
 // ═══════════════════════════════════════════════
-const TODAY = new Date();
+let TODAY = new Date();
 let vY = TODAY.getFullYear(), vM = TODAY.getMonth();
 let editId=null, editRecId=null, editHoldId=null;
 let histLim=30;
@@ -1137,13 +1147,21 @@ function toggleEur(){
   const cur=document.getElementById('currency').value,t=document.getElementById('type').value;
   const show=cur==='EUR'&&t!=='Current Cash Setup';
   document.getElementById('eur-box').style.display=show?'block':'none';
+  if(!show)document.getElementById('eur-total').value='';
   if(show&&!document.getElementById('pur-rate').value)document.getElementById('pur-rate').value=eurRate;
   if(show)calcEur();
   showInvBox();
 }
 function calcEur(){
-  const a=parseFloat(document.getElementById('amount').value)||0,r=parseFloat(document.getElementById('pur-rate').value)||0;
-  document.getElementById('eur-calc').innerText=`Total Paid: ¥${(a*r).toLocaleString(undefined,{maximumFractionDigits:0})}`;
+  const a=Math.abs(parseFloat(document.getElementById('amount').value)||0);
+  const r=parseFloat(document.getElementById('pur-rate').value)||0;
+  const exact=parseFloat(document.getElementById('eur-total').value);
+  const el=document.getElementById('eur-calc');
+  if(exact>0&&a>0){
+    el.innerHTML=`Using exact total <strong>¥${Math.round(exact).toLocaleString()}</strong> · effective rate ¥${(exact/a).toFixed(2)}/€`;
+  } else {
+    el.innerText=`Total Paid: ¥${(a*r).toLocaleString(undefined,{maximumFractionDigits:0})}`;
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -1205,7 +1223,12 @@ async function addEntry(){
   const isInc=type==='Salary/Bonus'||type==='Extra Allowance';
   const isAsset=type==='Current Cash Setup';
   let amt=rawAmt;if(!isInc&&!isAsset)amt=-Math.abs(rawAmt);
-  const pRate=(cur==='EUR'&&!isAsset)?(parseFloat(document.getElementById('pur-rate').value)||eurRate):null;
+  let pRate=null;
+  if(cur==='EUR'&&!isAsset){
+    const exactTotal=parseFloat(document.getElementById('eur-total').value);
+    const eurAmt=Math.abs(rawAmt);
+    pRate=(exactTotal>0&&eurAmt>0)?(exactTotal/eurAmt):(parseFloat(document.getElementById('pur-rate').value)||eurRate);
+  }
   const entry={id:editId||Date.now(),type,label:lbl,amount:amt,currency:cur,purchaseRate:pRate,date,ccType,billingCycle:calcBillCycle(date,ccType)};
 
   // ── price + units for a tracked investment ──
@@ -1232,6 +1255,7 @@ async function addEntry(){
   document.getElementById('inv-manual').checked=false;
   document.getElementById('inv-price-wrap').style.display='none';
   document.getElementById('inv-price').value='';
+  document.getElementById('eur-total').value='';
   saveRender();
 }
 function triggerEdit(id){
@@ -1277,7 +1301,9 @@ function setSyncStatus(state,msg){
   const [t,bg,fg]=map[state]||map.idle;
   el.innerText=msg||t;el.style.background=bg;el.style.color=fg;
 }
+let _storWarned=false;
 function persistLocal(){
+  try{
   localStorage.setItem('financeTrackerData',JSON.stringify(entries));
   localStorage.setItem('financeTrackerRecurring',JSON.stringify(recItems));
   localStorage.setItem('financeTrackerHoldings',JSON.stringify(holdings));
@@ -1291,6 +1317,9 @@ function persistLocal(){
   localStorage.setItem('financeTrackerNisaCap',nisaCap);
   localStorage.setItem('financeTrackerToken',cloudToken);
   localStorage.setItem('financeTrackerPaydayOv',JSON.stringify(paydayOverrides));
+  }catch(err){
+    if(!_storWarned){_storWarned=true;alert("⚠️ Couldn't save locally (storage blocked or full). Your data still syncs to the cloud, but use ⬆️ Push All before closing, and avoid private-browsing mode.");}
+  }
 }
 function gurl(extra){return CLOUD_URL+(CLOUD_URL.indexOf('?')>=0?'&':'?')+'token='+encodeURIComponent(cloudToken)+(extra?'&'+extra:'');}
 function cloudPayload(force){
@@ -1577,12 +1606,15 @@ function getRecForMonth(year,month){
 
 // ── FIXED: strict label matching only to stop the 1080 amount bug
 function isPaid(item,year,month){
+  const nm=(item.name||'').toLowerCase();
   return entries.some(e=>{
     if(!e.date)return false;
     const d=new Date(e.date+'T00:00:00');
     if(d.getFullYear()!==year||d.getMonth()!==month||e.amount>=0)return false;
-    const lm=(e.label||'').toLowerCase().includes(item.name.toLowerCase())||item.name.toLowerCase().includes((e.label||'').toLowerCase());
-    return lm; 
+    const lbl=(e.label||'').toLowerCase();
+    if(lbl===nm)return true;                              // exact match always counts
+    if(nm.length<3||lbl.length<3)return false;            // too short to fuzzy-match safely
+    return lbl.includes(nm)||nm.includes(lbl);
   });
 }
 
@@ -1741,7 +1773,7 @@ function renderRMList(){
     const ovStr=item.monthOverrides?` <span class="bdg b-bl">Overrides</span>`:'';
     return`<div class="rm-it ${item.active?'':'inactive'}">
       <div style="flex:1;min-width:0;">
-        <div class="rm-n">${item.name}${ovStr} <span class="muted" style="font-weight:400;font-size:.72rem;">(${item.category})</span></div>
+        <div class="rm-n">${esc(item.name)}${ovStr} <span class="muted" style="font-weight:400;font-size:.72rem;">(${item.category})</span></div>
         <div class="rm-m">${as} · ${PL[item.period]||item.period} · Next: ${ns}${item.note?' · '+item.note:''}</div>
       </div>
       <div class="rm-b">
@@ -2071,9 +2103,32 @@ function openRecModal(){
   onRecPer();renderRMList();document.getElementById('rec-modal').style.display='flex';
 }
 function openHoldingsModal(){renderHoldingsList();document.getElementById('hold-modal').style.display='flex';}
+function renderCatBars(){
+  const c=document.getElementById('cat-bars');if(!c)return;
+  document.getElementById('cat-mo-lbl').innerText=`— ${MN[vM]} ${vY} (by activity date)`;
+  const mS=new Date(vY,vM,1),mE=new Date(vY,vM+1,0,23,59,59,999);
+  const sums={};
+  for(const e of entries){
+    if(!e.date||e.amount>=0)continue;
+    if(e.type==='Current Cash Setup'||e.type==='Investment')continue;
+    const d=new Date(e.date+'T00:00:00');
+    if(d<mS||d>mE)continue;
+    const val=Math.abs(e.currency==='EUR'?e.amount*(e.purchaseRate||eurRate):e.amount);
+    const key=e.type==='Credit Card'?'💳 Card purchases':e.type;
+    sums[key]=(sums[key]||0)+val;
+  }
+  const rows=Object.entries(sums).sort((a,b)=>b[1]-a[1]);
+  if(!rows.length){c.innerHTML='<div class="muted" style="font-size:.78rem;">No spending logged this month.</div>';return;}
+  const max=rows[0][1],tot=rows.reduce((s,r)=>s+r[1],0);
+  c.innerHTML=rows.map(([k,v])=>`<div style="margin:5px 0;">
+      <div style="display:flex;justify-content:space-between;font-size:.74rem;"><span>${esc(k)}</span><span>${jpy(v)} <span class="muted">(${(v/tot*100).toFixed(0)}%)</span></span></div>
+      <div style="background:rgba(0,0,0,.18);border-radius:4px;height:8px;overflow:hidden;margin-top:2px;"><div style="height:100%;width:${(v/max*100).toFixed(1)}%;background:var(--accent);"></div></div>
+    </div>`).join('');
+}
 function openReports(){
   document.getElementById('reports-modal').style.display='flex';
   renderNetWorthChart();
+  renderCatBars();
   const ys=document.getElementById('exp-yr');ys.innerHTML='';
   let yrs=new Set(entries.map(e=>e.date?.substring(0,4)));
   if(!yrs.size)yrs.add(String(TODAY.getFullYear()));
@@ -2234,7 +2289,80 @@ function computeMonthData(year,month){
 function g(id){return document.getElementById(id);}
 function jpy(n){return`¥${n.toLocaleString(undefined,{maximumFractionDigits:0})}`;}
 
+// ═══════════════════════════════════════════════
+// FORWARD PROJECTION ENGINE
+// From today's position, walk month by month and estimate liquid cash and
+// net worth at each month-end, using known commitments (recurring, CC bills
+// due, scheduled investments) and optionally trend spending (3-month avg).
+// ═══════════════════════════════════════════════
+function recurringTotalsForMonth(y,m){
+  let cash=0,inv=0,card=0;
+  for(const r of getRecForMonth(y,m)){
+    const val=r.item.currency==='EUR'?r.amount*eurRate:r.amount;
+    const isCard=r.item.payMethod&&r.item.payMethod!=='Cash';
+    if(r.item.category==='Investment')inv+=val;
+    else if(isCard)card+=val;
+    else cash+=val;
+  }
+  return {cash,inv,card};
+}
+function trailingAvg(nMonths){
+  let cash=0,card=0,cnt=0;
+  for(let i=1;i<=nMonths;i++){
+    let m=TODAY.getMonth()-i,y=TODAY.getFullYear();while(m<0){m+=12;y--;}
+    const d=computeMonthData(y,m);
+    if(d.cashExp>0||d.spend.card>0){cash+=d.cashExp;card+=d.spend.card;cnt++;}
+  }
+  return cnt?{cash:cash/cnt,card:card/cnt}:{cash:0,card:0};
+}
+// remaining KNOWN commitments in the current month (after today)
+function currentMonthRemaining(){
+  const y=TODAY.getFullYear(),m=TODAY.getMonth();
+  const md=computeMonthData(y,m);
+  let recCash=0,recInv=0,recCard=0;
+  for(const r of getRecForMonth(y,m)){
+    if(isPaid(r.item,y,m)||r.date<=TODAY)continue;
+    const val=r.item.currency==='EUR'?r.amount*eurRate:r.amount;
+    const isCard=r.item.payMethod&&r.item.payMethod!=='Cash';
+    if(r.item.category==='Investment')recInv+=val;
+    else if(isCard)recCard+=val;
+    else recCash+=val;
+  }
+  let ccDueLater=0;
+  [...md.cc10Ents,...md.cc27Ents].forEach(e=>{const bd=getBillDate(e);if(bd&&bd>TODAY)ccDueLater+=Math.abs(e.currency==='EUR'?e.amount*(e.purchaseRate||eurRate):e.amount);});
+  const incomeRemain=Math.max(0,Math.max(md.income,expInc)-md.income);
+  return {incomeRemain,recCash,recInv,recCard,ccDueLater};
+}
+// project to the END of (ty,tm). Returns null for past months.
+function projectPosition(ty,tm,startCash,startNet){
+  const curY=TODAY.getFullYear(),curM=TODAY.getMonth();
+  if(ty<curY||(ty===curY&&tm<curM))return null;
+  const avg=trailingAvg(3);
+  const rem=currentMonthRemaining();
+  // current month remainder (known commitments only — spending so far is already in startCash)
+  let cashK=startCash+rem.incomeRemain-rem.recCash-rem.recInv-rem.ccDueLater;
+  let cashT=cashK;
+  let netK=startNet+rem.incomeRemain-rem.recCash-rem.recCard;   // investments & bill payments are net-neutral
+  let netT=netK;
+  // full future months up to target
+  let y=curY,m=curM;
+  while(y<ty||(y===ty&&m<tm)){
+    m++;if(m>11){m=0;y++;}
+    const md=computeMonthData(y,m);
+    const rec=recurringTotalsForMonth(y,m);
+    const ccDue=md.cc10+md.cc27;                       // committed bills landing this month (incl. projected card recurring)
+    const spendCashT=Math.max(rec.cash,avg.cash);      // trend: at least the known recurring, usually the 3-mo average
+    const cardBuyT=Math.max(rec.card,avg.card);
+    cashK+=expInc-rec.cash-rec.inv-ccDue;
+    cashT+=expInc-spendCashT-rec.inv-ccDue;
+    netK +=expInc-rec.cash-rec.card;
+    netT +=expInc-spendCashT-cardBuyT;
+  }
+  return {cashK,cashT,netK,netT};
+}
+
 function renderDashboard(){
+  TODAY=new Date();   // refresh: an app left open across midnight must not use a stale "today"
   // ── TRIGGER AUTO SETTLE ENGINE ──
   // Only settle for the ACTUAL current month, never the month being browsed,
   // so navigating to past months can't spawn back-dated entries.
@@ -2356,10 +2484,37 @@ function renderDashboard(){
     g('w-holdings-sum').style.display='block';
     g('w-holdings-sum').innerHTML=`Holdings: ${jpy(tMkt)} <span style="color:${pnl>=0?'var(--green)':'var(--red)'};">(${pnl>=0?'+':''}${jpy(pnl)})</span>`;
   }
-  const netWorth=w.jpy+eurV+w.nisa+w.stk+holdMkt;
+  // mark tracked investments to market (entries with a captured unitPrice + a live price)
+  let mtmAdj=0;
+  trackedInv.forEach(inst=>{if(inst.price>0){const s=invSummary(inst);if(s.invested>0)mtmAdj+=(s.value-s.invested);}});
+  // outstanding card debt is money already owed — net worth must reflect it
+  const netWorth=w.jpy+eurV+w.nisa+w.stk+holdMkt+mtmAdj-pendingCC;
   g('w-net').innerText=jpy(netWorth);
   g('w-net').style.color=netWorth>=0?'var(--green)':'var(--red)';
+  g('w-net-det').innerHTML=(mtmAdj!==0?`incl. market ${mtmAdj>=0?'gain':'loss'} ${jpy(mtmAdj)}`:'')+
+    (pendingCC>0?`${mtmAdj!==0?' · ':''}after ${jpy(pendingCC)} card debt`:'');
   maybeSnapshot(netWorth,{cash:w.jpy,eur:eurV,nisa:w.nisa,stk:w.stk,hold:holdMkt});
+
+  // ── 🔮 projection: end of viewed month + end of year ──
+  {
+    const card=g('c-proj-card');
+    const proj=projectPosition(vY,vM,w.jpy,netWorth);
+    if(!proj){card.style.display='none';}
+    else{
+      card.style.display='';
+      g('proj-when').innerText=`end of ${MN[vM]} ${vY}`;
+      const eoyY=TODAY.getFullYear();
+      const eoy=(vY>eoyY||(vY===eoyY&&vM===11))?null:projectPosition(eoyY,11,w.jpy,netWorth);
+      const f=v=>`<strong style="color:${v>=0?'var(--green)':'var(--red)'};">${jpy(v)}</strong>`;
+      g('c-proj').innerHTML=
+        `<span class="muted" style="font-size:.66rem;">Known commitments only:</span><br>`+
+        `Cash ${f(proj.cashK)} · Net ${f(proj.netK)}<br>`+
+        `<span class="muted" style="font-size:.66rem;">If spending matches your 3-month average:</span><br>`+
+        `Cash ${f(proj.cashT)} · Net ${f(proj.netT)}`+
+        (eoy?`<div style="border-top:1px dashed var(--bdr);margin-top:6px;padding-top:5px;">By Dec 31, ${eoyY}: Net ${f(eoy.netK)} <span class="muted" style="font-size:.66rem;">(known)</span> / ${f(eoy.netT)} <span class="muted" style="font-size:.66rem;">(trend)</span></div>`:'')+
+        `<div class="muted" style="font-size:.6rem;margin-top:4px;">Assumes income ¥${expInc.toLocaleString()}/mo; includes recurring, scheduled NISA, and CC bills due. Investments move cash → assets (net-neutral).</div>`;
+    }
+  }
 
   const cyc=currentPayCycle(isCurM()?TODAY:new Date(vY,vM,15));
   const cd=computeCycle(cyc.start,cyc.end);
@@ -2441,7 +2596,7 @@ function renderUpcoming(items){
 
     return`<div class="rec-it ${bc}">
       <div>
-        <div class="rec-n">${item.name}${paid?'<span class="pbdg">✓ Paid</span>':''} <span class="muted" style="font-size:.67rem;">${PL[item.period]||item.period}</span></div>
+        <div class="rec-n">${esc(item.name)}${paid?'<span class="pbdg">✓ Paid</span>':''} <span class="muted" style="font-size:.67rem;">${PL[item.period]||item.period}</span></div>
         <div class="rec-m">${item.category} · Due ${d}${sfx} ${payBadge}${item.note?' · '+item.note:''}</div>
       </div>
       <div style="display:flex; align-items:center;">
@@ -2455,10 +2610,55 @@ function renderUpcoming(items){
 // ═══════════════════════════════════════════════
 // FLOW CHART
 // ═══════════════════════════════════════════════
+// 12-month income vs spending trend (bars) + net line, ending at the viewed month.
+function drawTrend12(){
+  const months=[];
+  for(let i=11;i>=0;i--){let m=vM-i,y=vY;while(m<0){m+=12;y--;}months.push([y,m]);}
+  const data=months.map(([y,m])=>{const d=computeMonthData(y,m);return{y,m,inc:d.income,exp:d.totalExp,net:d.income-d.totalExp};});
+  const totInc=data.reduce((s,d)=>s+d.inc,0),totExp=data.reduce((s,d)=>s+d.exp,0),totNet=totInc-totExp;
+  g('sk-net').innerText=jpy(totNet);
+  g('sk-net').style.color=totNet>=0?'var(--green)':'var(--red)';
+  g('sk-rat').innerText=totInc>0?`${(totExp/totInc*100).toFixed(0)}%`:'—';
+  g('sk-rat').style.color=totExp>totInc?'var(--red)':'var(--green)';
+  const hasData=data.some(d=>d.inc>0||d.exp>0);
+  g('sk-empty').style.display=hasData?'none':'block';
+  g('sankey_chart').style.display=hasData?'block':'none';
+  if(!hasData)return;
+  const W=700,H=240,padL=8,padR=8,padT=14,padB=26;
+  const innerW=W-padL-padR,innerH=H-padT-padB;
+  const maxV=Math.max(...data.map(d=>Math.max(d.inc,d.exp)),1);
+  const slot=innerW/12,bw=Math.min(14,slot*0.32);
+  const yOf=v=>padT+innerH-(v/maxV)*innerH;
+  let bars='',labels='',netPts=[];
+  data.forEach((d,i)=>{
+    const cx=padL+slot*i+slot/2;
+    bars+=`<rect x="${(cx-bw-1).toFixed(1)}" y="${yOf(d.inc).toFixed(1)}" width="${bw}" height="${(innerH+padT-yOf(d.inc)).toFixed(1)}" fill="var(--green)" opacity=".85"><title>${MN[d.m]} ${d.y} income: ¥${Math.round(d.inc).toLocaleString()}</title></rect>`;
+    bars+=`<rect x="${(cx+1).toFixed(1)}" y="${yOf(d.exp).toFixed(1)}" width="${bw}" height="${(innerH+padT-yOf(d.exp)).toFixed(1)}" fill="var(--red)" opacity=".85"><title>${MN[d.m]} ${d.y} spent: ¥${Math.round(d.exp).toLocaleString()}</title></rect>`;
+    netPts.push(`${cx.toFixed(1)},${yOf(Math.max(0,d.net)).toFixed(1)}`);
+    labels+=`<text x="${cx.toFixed(1)}" y="${H-8}" font-size="9" fill="var(--muted)" text-anchor="middle">${MN[d.m].slice(0,3)}${d.m===0?` '${String(d.y).slice(2)}`:''}</text>`;
+  });
+  const svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;" xmlns="http://www.w3.org/2000/svg">
+    <line x1="${padL}" y1="${padT+innerH}" x2="${W-padR}" y2="${padT+innerH}" stroke="var(--bdr)" stroke-width="1"/>
+    ${bars}
+    <polyline points="${netPts.join(' ')}" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-dasharray="3,3" opacity=".9"/>
+    ${labels}
+    <g font-size="10">
+      <rect x="${padL}" y="2" width="9" height="9" fill="var(--green)"/><text x="${padL+13}" y="10" fill="var(--muted)">Income</text>
+      <rect x="${padL+68}" y="2" width="9" height="9" fill="var(--red)"/><text x="${padL+81}" y="10" fill="var(--muted)">Spent (bills due)</text>
+      <line x1="${padL+185}" y1="7" x2="${padL+205}" y2="7" stroke="var(--accent)" stroke-width="1.6" stroke-dasharray="3,3"/><text x="${padL+209}" y="10" fill="var(--muted)">Net (≥0)</text>
+    </g>
+  </svg>
+  <div class="muted" style="font-size:.64rem;margin-top:2px;">12 months ending ${MN[vM]} ${vY} — navigate months to slide the window. Tap a bar for the exact amount.</div>`;
+  g('sankey_chart').innerHTML=svg;
+}
 function drawSankey() {
   const mode = g('sk-mode').value;
   const now  = new Date();
   const mS   = new Date(vY, vM, 1), mE = new Date(vY, vM+1, 0, 23, 59, 59, 999);
+
+  // ── 12-month trend replaces the old all-time Sankey (which lumped every
+  //    transaction ever into one diagram and became unreadable over time) ──
+  if (mode === 'all') { drawTrend12(); return; }
 
   let flowInc = 0, flowExp = {}, flowCC = 0;
 
