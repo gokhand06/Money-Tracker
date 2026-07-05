@@ -815,16 +815,19 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
       <div class="csub" id="c-lwy-s" style="font-size:.7rem;"></div>
     </div>
     <div class="card">
-      <div class="clbl">Future Cash Forecast</div>
+      <div class="clbl">Future Cash Forecast <span id="f-when" class="muted" style="font-size:.7rem;"></span></div>
+      <div onclick="editExpInc()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0 6px;border-bottom:1px dashed var(--bdr);margin-bottom:5px;" title="Click to edit your expected monthly income">
+        <span class="muted" style="font-size:.72rem;">Expected monthly income</span>
+        <span style="font-size:.82rem;"><strong id="f-exp-mo">¥0</strong> <span class="muted" style="font-size:.62rem;">✎</span></span>
+      </div>
       <div class="csub" style="line-height:2.0;font-size:.76rem;">
-        Actual Bank Now:&nbsp;<strong id="f-bank">¥0</strong><br>
-        + Expected Salary:&nbsp;<strong id="f-sal" class="green">¥0</strong><br>
-        − Pending CC Bills:&nbsp;<strong id="f-cc" class="red">¥0</strong><br>
-        − Upcoming Recurring:&nbsp;<strong id="f-rec" class="orange">¥0</strong><br>
-        + Future Income (logged):&nbsp;<strong id="f-fi" class="green">¥0</strong><br>
-        − Future Costs (logged):&nbsp;<strong id="f-fo" class="red">¥0</strong><br>
+        Actual bank now:&nbsp;<strong id="f-bank">¥0</strong><br>
+        + Expected salary to come:&nbsp;<strong id="f-sal" class="green">¥0</strong> <span class="muted" style="font-size:.6rem;" title="Your expected monthly income minus any salary already received this month. ¥0 means this month's pay is already in your bank — so it's never added twice.">ⓘ</span><br>
+        − Recurring still due:&nbsp;<strong id="f-rec" class="orange">¥0</strong><br>
+        <span id="f-inv-row">− Investing scheduled:&nbsp;<strong id="f-inv" class="orange">¥0</strong><br></span>
+        − Card bills due:&nbsp;<strong id="f-cc" class="red">¥0</strong><br>
         <div style="border-top:1px dashed var(--bdr);padding-top:4px;margin-top:4px;">
-          Projected: <strong id="f-proj" style="font-size:1.1rem;">¥0</strong>
+          Projected (end of month): <strong id="f-proj" style="font-size:1.1rem;">¥0</strong>
         </div>
       </div>
     </div>
@@ -902,6 +905,10 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
         <option value="Investment">Investment</option>
       </select>
       <input type="text" id="hf-s" placeholder="🔍 Search…" oninput="renderHist()">
+      <select id="hf-sort" onchange="renderHist()" title="Sort order">
+        <option value="new">Newest first</option>
+        <option value="old">Oldest first</option>
+      </select>
       <label><input type="checkbox" id="hf-m" onchange="renderHist()"> Month only</label>
     </div>
     <ul class="hul" id="h-list"></ul>
@@ -1142,6 +1149,9 @@ let dflts    = JSON.parse(localStorage.getItem('financeTrackerDefaults'))  || {
 };
 let eurRate  = parseFloat(localStorage.getItem('financeTrackerEurRate'))   || 185.9;
 let expInc   = parseFloat(localStorage.getItem('financeTrackerExpInc'))    || 233847;
+// Monthly forecast assumptions — edited only in the APK, but kept + round-tripped
+// here so a push from the website can't wipe them from the cloud (pass-through).
+let forecastVars = JSON.parse(localStorage.getItem('financeTrackerForecastVars')||'[]');
 // Auto-tracked investments (yen-denominated Tokyo proxies so there's no FX math).
 // "keyword" = text that appears in the Label of your logged Investment entries.
 let trackedInv = JSON.parse(localStorage.getItem('financeTrackerTracked')) || [
@@ -1192,7 +1202,7 @@ let histLim=30;
 // ═══════════════════════════════════════════════
 document.getElementById('eur-r-inp').value  = eurRate;
 document.getElementById('exp-inc-inp').value = expInc;
-document.getElementById('date').valueAsDate  = new Date();
+document.getElementById('date').value  = localISO(new Date());
 buildTplUI();
 applyTheme(localStorage.getItem('financeTrackerTheme')||'dark');
 setSyncStatus(urlOk()?'idle':'error', urlOk()?'☁️ Ready':'⚠️ Set URL');
@@ -1363,7 +1373,7 @@ async function addEntry(){
       if(inst&&inst.ticker){
         const sb=document.getElementById('sub-btn');const old=sb.innerText;sb.innerText='⏳ Pricing…';sb.disabled=true;
         let px=null;
-        try{const r=await fetchTickerPrice(inst.ticker);px=r.price;inst.price=r.price;inst.prevClose=r.prevClose;inst.updated=new Date().toISOString().split('T')[0];}
+        try{const r=await fetchTickerPrice(inst.ticker);px=r.price;inst.price=r.price;inst.prevClose=r.prevClose;inst.updated=localISO(new Date());}
         catch{px=inst.price||null;}                       // fall back to last known price
         if(px&&px>0){entry.unitPrice=px;entry.units=roundUnits(Math.abs(amt)/px,rmode,scale);}
         sb.disabled=false;sb.innerText=old;
@@ -1404,12 +1414,18 @@ function cancelEdit(){
   document.getElementById('can-btn').style.display='none';
   document.getElementById('label').value='';
   document.getElementById('amount').value='';
-  document.getElementById('date').valueAsDate=new Date();
+  document.getElementById('date').value=localISO(new Date());
   document.getElementById('ftag').style.display='none';
   closeSB();   // also dismiss the slide-out + scrim on explicit cancel (Bug A)
   handleTypeChange();
 }
-function delEntry(id){if(editId===id)cancelEdit();entries=entries.filter(e=>e.id!==id);saveRender();}
+function delEntry(id){
+  const e=entries.find(x=>x.id===id);
+  const dAmt=e?(e.currency==='EUR'?`€${Math.abs(e.amount).toLocaleString()}`:`¥${Math.abs(e.amount).toLocaleString()}`):'';
+  const lbl=e?`"${e.label||e.type||'this entry'}" (${dAmt}, ${e.date})`:'this entry';
+  if(!confirm(`Delete ${lbl}?\n\nThis cannot be undone.`))return;
+  if(editId===id)cancelEdit();entries=entries.filter(e=>e.id!==id);saveRender();
+}
 function clearData(){if(confirm("Wipe ALL transaction history? This cannot be undone.")){entries=[];saveRender();}}
 
 // ═══════════════════════════════════════════════
@@ -1452,6 +1468,7 @@ function persistLocal(){
   localStorage.setItem('financeTrackerSnapshots',JSON.stringify(snapshots));
   localStorage.setItem('financeTrackerEurRate',eurRate);
   localStorage.setItem('financeTrackerExpInc',expInc);
+  localStorage.setItem('financeTrackerForecastVars',JSON.stringify(forecastVars));
   localStorage.setItem('financeTrackerCloudUrl',CLOUD_URL);
   localStorage.setItem('financeTrackerRev',cloudRev);
   localStorage.setItem('financeTrackerNisaCap',nisaCap);
@@ -1465,7 +1482,7 @@ function gurl(extra){return CLOUD_URL+(CLOUD_URL.indexOf('?')>=0?'&':'?')+'token
 function cloudPayload(force){
   const prices={};entries.forEach(e=>{if(e.unitPrice)prices[String(e.id)]=e.unitPrice;});
   return {action:'syncAll',entries,recurring:recItems,holdings,defaults:dflts,
-          tracked:trackedInv,snapshots,prices,eurRate,expInc,nisaCap,baseRev:cloudRev,force:!!force,token:cloudToken,paydayOverrides};
+          tracked:trackedInv,snapshots,prices,eurRate,expInc,nisaCap,forecastVars,baseRev:cloudRev,force:!!force,token:cloudToken,paydayOverrides};
 }
 function urlOk(){return CLOUD_URL&&CLOUD_URL.startsWith('https://script.google.com');}
 // returns 'ok' on success, 'conflict' if cloud changed elsewhere, false on failure
@@ -1536,6 +1553,7 @@ async function syncCloud(){
       if(data.expInc!=null&&!isNaN(parseFloat(data.expInc)))  expInc=parseFloat(data.expInc);
       if(data.nisaCap!=null&&!isNaN(parseInt(data.nisaCap))&&parseInt(data.nisaCap)>0)nisaCap=parseInt(data.nisaCap);
       if(data.paydayOv&&typeof data.paydayOv==='object'){paydayOverrides=data.paydayOv;localStorage.setItem('financeTrackerPaydayOv',JSON.stringify(paydayOverrides));}
+      if(Array.isArray(data.forecastVars))forecastVars=data.forecastVars;
     } else {
       alert("⚠️ Connected, but your Apps Script is an OLD version (it only returns transactions, not recurring/holdings). Update the script to v2.6 and redeploy a NEW version, then Sync again.");
     }
@@ -1553,7 +1571,7 @@ async function refreshMarketPrices(silent){
   const all=[...new Set([...tT.map(t=>String(t.ticker)),...tH.map(h=>String(h.ticker))])];
   if(!all.length)return {ok:0,tot:0};
   const prices=await getPrices(all);
-  const today=new Date().toISOString().split('T')[0];
+  const today=localISO(new Date());
   let ok=0,tot=0;
   tT.forEach(t=>{tot++;const q=prices[String(t.ticker)];if(q){t.price=q.price;t.prevClose=q.prevClose;t.updated=today;ok++;}});
   tH.forEach(h=>{tot++;const q=prices[String(h.ticker)];if(q){h.currentPrice=q.price;h.lastUpdated=today;ok++;}});
@@ -1660,7 +1678,13 @@ function adjustPayday(){
   }
   localStorage.setItem('financeTrackerPaydayOv',JSON.stringify(paydayOverrides));
   saveRender();
-}function updateExpInc(v){expInc=parseFloat(v)||0;persist();renderDashboard();}
+}function updateExpInc(v){expInc=parseFloat(v)||0;const i=document.getElementById('exp-inc-inp');if(i)i.value=expInc;persist();renderDashboard();}
+// click the "Expected monthly income" line on the forecast card to edit the figure
+function editExpInc(){
+  const v=prompt("Expected Monthly Income (¥).\n\nThis is a forecast figure only — it never changes any logged transactions; it just feeds the projections below.",expInc);
+  if(v===null)return;const n=parseFloat(String(v).replace(/[^0-9.]/g,''));
+  if(!isNaN(n)&&n>=0)updateExpInc(n);
+}
 async function fetchLiveRate(){
   const btn=document.getElementById('live-r-btn');btn.innerText="⏳";
   try{
@@ -2035,7 +2059,7 @@ function saveHolding(){
   const cur=parseFloat(document.getElementById('h-cur').value);
   const tick=document.getElementById('h-tick').value.trim();
   if(!nm||isNaN(un)||isNaN(avg)){alert("Enter name, units, and average buy price.");return;}
-  const h={id:editHoldId||Date.now(),name:nm,account:acc,ticker:tick,units:un,avgBuyPrice:avg,currentPrice:cur||avg,lastUpdated:new Date().toISOString().split('T')[0]};
+  const h={id:editHoldId||Date.now(),name:nm,account:acc,ticker:tick,units:un,avgBuyPrice:avg,currentPrice:cur||avg,lastUpdated:localISO(new Date())};
   if(editHoldId){const i=holdings.findIndex(x=>x.id===editHoldId);if(i!==-1)holdings[i]=h;cancelHoldEdit();}
   else holdings.push(h);
   persist();
@@ -2066,7 +2090,7 @@ function delHolding(id){
 async function refreshAllPrices(){
   const btn=document.getElementById('h-refresh-all');if(btn)btn.innerText="⏳ Refreshing…";
   const targets=holdings.filter(h=>h.ticker);
-  const today=new Date().toISOString().split('T')[0];
+  const today=localISO(new Date());
   const prices=await getPrices(targets.map(h=>h.ticker));
   let ok=0;
   targets.forEach(h=>{const q=prices[h.ticker];if(q){h.currentPrice=q.price;h.lastUpdated=today;ok++;}});
@@ -2163,7 +2187,7 @@ function invSummary(inst){
 async function refreshTracked(){
   const btn=g('inv-refresh');if(btn)btn.innerText='⏳ Fetching…';
   const targets=trackedInv.filter(t=>t.ticker);
-  const today=new Date().toISOString().split('T')[0];
+  const today=localISO(new Date());
   const prices=await getPrices(targets.map(t=>t.ticker));
   let ok=0;
   targets.forEach(t=>{const q=prices[t.ticker];if(q){t.price=q.price;t.prevClose=q.prevClose;t.updated=today;ok++;}});
@@ -2281,7 +2305,7 @@ function renderNetWorthChart(){
 // MODALS
 // ═══════════════════════════════════════════════
 function openRecModal(){
-  if(!document.getElementById('re-sd').value)document.getElementById('re-sd').valueAsDate=new Date();
+  if(!document.getElementById('re-sd').value)document.getElementById('re-sd').value=localISO(new Date());
   onRecPer();renderRMList();document.getElementById('rec-modal').style.display='flex';
 }
 function openHoldingsModal(){renderHoldingsList();document.getElementById('hold-modal').style.display='flex';}
@@ -2726,24 +2750,23 @@ function renderDashboard(){
     g('c-lwy-s').innerHTML+=`<br><strong style="color:var(--green);">≈ ${jpy(leeway/daysLeft)}/day</strong> for ${daysLeft} day${daysLeft>1?'s':''} until payday (${fmtMD(cyc.next)})`;
   }
 
-  const nextMo=(TODAY.getMonth()+1)%12,nextYr=TODAY.getMonth()===11?TODAY.getFullYear()+1:TODAY.getFullYear();
-  const nextRec=getRecForMonth(nextYr,nextMo);
-  const nextRecAmt=nextRec.reduce((s,r)=>(r.item.payMethod&&r.item.payMethod!=='Cash')?s:s+(r.item.currency==='EUR'?r.amount*eurRate:r.amount),0);
-  // Only the salary NOT yet received in the CURRENT cycle — w.jpy already includes any logged
-  // salary (Bug B). Anchored to TODAY (not the viewed month) so browsing months can't skew it.
-  const curCyc=currentPayCycle(TODAY);
-  const curCd=computeCycle(curCyc.start,curCyc.end);
-  const expectedRemain=Math.max(0,expInc-curCd.income);
-  const projected=w.jpy+expectedRemain-pendingCC-nextRecAmt+futInc-futExp;
-
+  // ── Future Cash Forecast: TRUE end-of-THIS-month cash. currentMonthRemaining()
+  //    returns the same figures the Projected Position card uses; incomeRemain only
+  //    counts salary NOT already received this month, so it can never double-count
+  //    cash that's already in the bank. Anchored to TODAY's month. ──
+  const fcM=TODAY.getMonth();
+  const fRem=currentMonthRemaining();
+  const fcCash=w.jpy+fRem.incomeRemain-fRem.recCash-fRem.recInv-fRem.ccDueLater;
+  {const fm=g('f-exp-mo');if(fm)fm.innerText=jpy(expInc);}
+  {const fw=g('f-when');if(fw)fw.innerText=`end of ${MN[fcM]}`;}
   g('f-bank').innerText=jpy(w.jpy);
-  g('f-sal').innerText=`+ ${jpy(expectedRemain)}`;
-  g('f-cc').innerText=`− ${jpy(pendingCC)}`;
-  g('f-rec').innerText=`− ${jpy(nextRecAmt)}`;
-  g('f-fi').innerText=`+ ${jpy(futInc)}`;
-  g('f-fo').innerText=`− ${jpy(futExp)}`;
-  g('f-proj').innerText=jpy(projected);
-  g('f-proj').style.color=projected>=0?'var(--green)':'var(--red)';
+  g('f-sal').innerText=`+ ${jpy(fRem.incomeRemain)}`;
+  g('f-rec').innerText=`− ${jpy(fRem.recCash)}`;
+  g('f-inv').innerText=`− ${jpy(fRem.recInv)}`;
+  {const ir=g('f-inv-row');if(ir)ir.style.display=fRem.recInv>0?'':'none';}
+  g('f-cc').innerText=`− ${jpy(fRem.ccDueLater)}`;
+  g('f-proj').innerText=jpy(fcCash);
+  g('f-proj').style.color=fcCash>=0?'var(--green)':'var(--red)';
 
   renderUpcoming(recThisM);
   renderTracked();
@@ -2968,8 +2991,15 @@ function renderSVGFlow(container, income, expMap, net) {
 function showMore(){histLim+=20;renderHist();}
 function renderHist(){
   const ft=g('hf-t').value,srch=g('hf-s').value.toLowerCase(),mOnly=g('hf-m').checked;
+  const so=g('hf-sort')?g('hf-sort').value:'new';
+  const dir=so==='old'?1:-1;
   const todayEOD=new Date();todayEOD.setHours(23,59,59,999);
-  let list=[...entries].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  // Sort by calendar date, then by id (= Date.now() at creation) so two purchases
+  // on the same day order by the time they were logged (later-logged sits above earlier).
+  let list=[...entries].sort((a,b)=>{
+    const d=new Date(a.date)-new Date(b.date);
+    return dir*(d||((a.id||0)-(b.id||0)));
+  });
   if(ft)list=list.filter(e=>e.type===ft);
   if(srch)list=list.filter(e=>(e.label||'').toLowerCase().includes(srch));
   if(mOnly){const mS=new Date(vY,vM,1),mE=new Date(vY,vM+1,0,23,59,59);list=list.filter(e=>{const d=new Date(e.date+'T00:00:00');return d>=mS&&d<=mE;});}
