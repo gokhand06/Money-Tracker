@@ -601,6 +601,12 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
   .ls-glow,.ls-ring,.ls-tile,.ls-tile path,.ls-dots span,.ls-track i{ animation: none !important; }
   .ls-tile path{ stroke-dashoffset: 0 !important; opacity: 1 !important; }
 }
+/* investment preview block (shared with the app) */
+.inv-hd{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; font-size:.74rem; line-height:1.45; }
+.inv-sfx{ flex:none !important; font-weight:800; color:var(--muted); min-width:20px; text-align:center; }
+.inv-prev{ margin-top:10px; padding:9px 11px; border-radius:8px; background:rgba(0,0,0,.2); font-size:.8rem; line-height:1.55; }
+.inv-prev:empty{ display:none; }
+.hi-x{ font-size:.7rem; color:var(--muted); margin-top:4px; }
 </style>
 </head>
 <body>
@@ -643,10 +649,12 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
   <div class="fg">
     <label>Type / Category</label>
     <select id="type" onchange="handleTypeChange()">
-      <option value="Salary/Bonus">💴 Salary / Bonus (Income)</option>
-      <option value="Extra Allowance">➕ Extra Allowance (Income)</option>
+      <option value="Salary">💴 Salary (Income)</option>
+      <option value="Bonus">🎉 Bonus (Income)</option>
+      <option value="Additional Income">➕ Additional Income</option>
       <option value="Credit Card">💳 Credit Card Spending</option>
-      <option value="Daily">🛒 Daily Spending</option>
+      <option value="Card Credit">↩️ Card Refund / Credit</option>
+      <option value="Daily" selected>🛒 Daily Spending</option>
       <option value="Utility">💡 Utilities</option>
       <option value="Rent">🏠 Rent</option>
       <option value="Subscription">📱 Subscription</option>
@@ -659,23 +667,30 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
 
   <div class="cc-box" id="cc-box">
     <label>Credit Card</label>
-    <select id="cc-type" onchange="updateCCPre()">
+    <select id="cc-type" onchange="onCardChange()">
       <option value="PayPay">PayPay (27th Payment)</option>
-      <option value="Amazon">Amazon Card (10th Payment)</option>
+      <option value="Amazon">Amazon Card (27th Payment)</option>
       <option value="Joyo">Joyo Card (10th Payment)</option>
     </select>
+    <div id="cc-bill-wrap" style="display:none;margin-top:8px;">
+      <label>Apply to which bill?</label>
+      <div class="r2">
+        <select id="cc-bill" onchange="updateCCPre()" style="flex:2;"></select>
+        <button type="button" class="bsm bg" onclick="coverWholeBill()" style="flex:none;">Whole bill</button>
+      </div>
+    </div>
     <div class="cc-pre" id="cc-pre"></div>
   </div>
 
   <div class="fg">
     <label>Label / Description</label>
-    <input type="text" id="label" placeholder="e.g. June Salary, iPhone…">
+    <input type="text" id="label" placeholder="e.g. June Salary, iPhone…" oninput="invPreview()" autocomplete="off">
   </div>
 
   <div class="fg">
     <label>Amount & Currency</label>
     <div class="r2">
-      <input type="number" id="amount" step="any" placeholder="Amount" oninput="calcEur()" style="flex:2;">
+      <input type="number" id="amount" step="any" placeholder="Amount" oninput="calcEur();invPreview()" style="flex:2;">
       <select id="currency" onchange="toggleEur()" style="flex:1;">
         <option value="JPY">¥ JPY</option>
         <option value="EUR">€ EUR</option>
@@ -691,22 +706,29 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
     <div class="eur-calc" id="eur-calc">Total Paid: ¥0</div>
   </div>
 
-  <div class="eur-box" id="inv-box" style="display:none;">
-    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600;">
-      <input type="checkbox" id="inv-manual" onchange="document.getElementById('inv-price-wrap').style.display=this.checked?'block':'none';" style="width:auto;">
-      Enter unit price by hand
-    </label>
-    <div id="inv-price-wrap" style="display:none;margin-top:6px;">
-      <input type="number" id="inv-price" step="any" placeholder="price per unit/share, e.g. 18783">
-      <div class="muted" style="font-size:.66rem;margin-top:3px;">Used instead of the auto-fetched price. Units = amount ÷ this price. Leave unchecked to fetch automatically.</div>
+  <div class="eur-box inv-box" id="inv-box" style="display:none;">
+    <div class="inv-hd">
+      <span id="inv-inst" class="muted">Type a tracked name in the label (e.g. S&amp;P500)</span>
+      <button type="button" class="bsm bg" id="inv-fetch" onclick="invFetchPrice()">↻ Price</button>
     </div>
-    <label style="margin-top:8px;display:block;">Unit rounding <span style="font-size:.66rem;color:var(--muted);">(to a whole 口 — how brokers round 投資信託)</span></label>
-    <select id="inv-round">
-      <option value="up">Round up to next 口 (e.g. 0.5138746 → 0.5139)</option>
-      <option value="down">Round down to 口</option>
-      <option value="auto">Automatic — nearest 口</option>
-      <option value="none">No rounding (keep full decimals)</option>
-    </select>
+    <div class="r2">
+      <div style="flex:1.3;"><label>Unit price <span id="inv-px-unit" class="muted" style="font-size:.66rem;"></span></label>
+        <input type="number" id="inv-price" step="any" inputmode="decimal" placeholder="基準価額 / share price" oninput="_invPxAuto=false;invPreview()"></div>
+      <div><label>Rounding</label>
+        <select id="inv-round" onchange="invPreview()">
+          <option value="up">Broker rule</option>
+          <option value="down">Round down</option>
+          <option value="auto">Nearest</option>
+          <option value="none">Exact</option>
+        </select></div>
+    </div>
+    <label style="margin-top:8px;">Units received <span class="muted" style="font-size:.66rem;">— edit to match your broker's statement</span></label>
+    <div class="r2" style="align-items:center;">
+      <input type="number" id="inv-units" step="any" inputmode="decimal" oninput="_invUnitsManual=true;invPreview()" style="flex:2;">
+      <span id="inv-units-sfx" class="inv-sfx">口</span>
+      <button type="button" class="bsm bg" id="inv-units-auto" onclick="_invUnitsManual=false;invPreview()" style="flex:none;display:none;">Auto</button>
+    </div>
+    <div class="inv-prev" id="inv-prev"></div>
   </div>
 
   <div class="fg">
@@ -784,12 +806,12 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
       <div class="csub" id="c-nf-s" style="font-size:.7rem;"></div>
     </div>
     <div class="card">
-      <div class="clbl">10th Bill Debt — Amazon / Joyo</div>
+      <div class="clbl">10th Bill Debt — Joyo</div>
       <div class="cval red" id="c-cc10">¥0</div>
       <div class="cc-brk" id="cc10-brk"></div>
     </div>
     <div class="card">
-      <div class="clbl">27th Bill Debt — PayPay</div>
+      <div class="clbl">27th Bill Debt — PayPay / Amazon</div>
       <div class="cval red" id="c-cc27">¥0</div>
       <div class="cc-brk" id="cc27-brk"></div>
     </div>
@@ -876,7 +898,7 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
       <select id="sk-mode" class="vsel" onchange="renderDashboard()">
         <option value="month">📅 Monthly Cash Flow (billing-date view)</option>
         <option value="purchase">🛒 Monthly by Purchase Date</option>
-        <option value="debt-10">💳 Pending 10th Cycle — Amazon/Joyo</option>
+        <option value="debt-10">💳 Pending 10th Cycle — Joyo</option>
         <option value="debt-27">💳 Pending 27th Cycle — PayPay</option>
         <option value="all">📊 12-Month Trend (income vs spending)</option>
       </select>
@@ -894,8 +916,10 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
     <div class="hflt">
       <select id="hf-t" onchange="renderHist()">
         <option value="">All Types</option>
-        <option value="Salary/Bonus">Salary/Bonus</option>
-        <option value="Extra Allowance">Extra Allowance</option>
+        <option value="Salary">Salary</option>
+        <option value="Bonus">Bonus</option>
+        <option value="Additional Income">Additional Income</option>
+        <option value="Card Credit">Card Refund / Credit</option>
         <option value="Credit Card">Credit Card</option>
         <option value="Daily">Daily</option>
         <option value="Utility">Utility</option>
@@ -927,7 +951,7 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
       script code you must <strong>Deploy → New deployment</strong> (or Manage deployments → Edit → Version: New)
       and set access to <strong>Anyone</strong>. Then Save and Test below.
     </p>
-    <input id="cloud-url-inp" placeholder="https://script.google.com/macros/s/…/exec" style="width:100%;font-size:.8rem;">
+    <input id="cloud-url-inp" placeholder="PUT-YOUR-API-HERE" style="width:100%;font-size:.8rem;">
     <label style="font-size:.75rem;color:var(--muted);display:block;margin-top:8px;">Access token <span style="font-size:.68rem;">(required only if you set SECRET in the script — needed for public hosting)</span></label>
     <input id="cloud-token-inp" placeholder="leave blank for private/local use" style="width:100%;font-size:.8rem;">
     <div class="exp-row" style="margin-top:10px;gap:8px;">
@@ -1012,7 +1036,7 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
       <select id="re-pay">
         <option value="Cash">💴 Cash / Bank (immediate)</option>
         <option value="PayPay">💳 PayPay Card (27th bill)</option>
-        <option value="Amazon">💳 Amazon Card (10th bill)</option>
+        <option value="Amazon">💳 Amazon Card (27th bill)</option>
         <option value="Joyo">💳 Joyo Card (10th bill)</option>
       </select>
       <div style="font-size:.69rem;color:var(--muted);margin-top:2px;">Card-paid items (e.g. Spotify, Nikkei News) flow into that card's billing cycle instead of immediate cash.</div>
@@ -1039,7 +1063,7 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
         <option value="back">Shift back to previous business day</option>
         <option value="fwd">Shift forward to next business day</option>
       </select>
-      <div style="font-size:.69rem;color:var(--muted);margin-top:2px;">Back: the 25th (Sat) → 24th (Fri) — useful for NISA / Mebuki buys. Forward: rent on the 27th (Sat) → 29th (Mon). (National holidays aren't auto-detected.)</div>
+      <div style="font-size:.69rem;color:var(--muted);margin-top:2px;">Back: the 25th (Sat) → 24th (Fri) — useful for NISA / Mebuki buys. Forward: rent on the 27th (Sat) → 29th (Mon). Japanese public holidays are skipped too.</div>
     </div>
     <div class="fg">
       <label>Month Overrides — optional (e.g. 6:12000,12:12000 → June & Dec ¥12,000)</label>
@@ -1152,6 +1176,12 @@ let expInc   = parseFloat(localStorage.getItem('financeTrackerExpInc'))    || 23
 // Monthly forecast assumptions — edited only in the APK, but kept + round-tripped
 // here so a push from the website can't wipe them from the cloud (pass-through).
 let forecastVars = JSON.parse(localStorage.getItem('financeTrackerForecastVars')||'[]');
+// Label presets are edited in the phone app; the website only carries them through
+// sync (null until the first pull, so a website push never wipes them).
+let presets = JSON.parse(localStorage.getItem('financeTrackerPresets')||'null');
+function renderPresetChips(){}   // chips are app-only
+// the website has no styled dialog — use the browser's confirm()
+function uiConfirm(msg){return Promise.resolve(confirm(msg));}
 // Auto-tracked investments (yen-denominated Tokyo proxies so there's no FX math).
 // "keyword" = text that appears in the Label of your logged Investment entries.
 let trackedInv = JSON.parse(localStorage.getItem('financeTrackerTracked')) || [
@@ -1185,7 +1215,20 @@ function toISO(v){
   if(isNaN(d))d=new Date(s);
   return isNaN(d)?null:localISO(d);
 }
-function normalizeEntries(){entries.forEach(e=>{if(e)e.date=toISO(e.date);});}
+// ── Transaction-type vocabulary ──
+// Income comes in three kinds that never interact: only 'Salary' is reconciled
+// against the expected monthly salary; 'Bonus' and 'Additional Income' simply add
+// to wealth. (Older data used 'Salary/Bonus' + 'Extra Allowance' — migrated here.)
+function isIncomeT(t){return t==='Salary'||t==='Bonus'||t==='Additional Income';}
+// Rows that settle on a card's bill date: purchases and starting debt (negative)
+// and refunds / credits (type 'Card Credit', positive) which reduce a chosen bill.
+function isCardT(t){return t==='Credit Card'||t==='Existing Debt Setup'||t==='Card Credit';}
+function migrateType(e){
+  if(e.type==='Salary/Bonus')e.type=/bonus|賞与|ボーナス/i.test(e.label||'')?'Bonus':'Salary';
+  else if(e.type==='Extra Allowance')e.type='Additional Income';
+}
+function normalizeEntries(){entries.forEach(e=>{if(!e)return;e.date=toISO(e.date);migrateType(e);if(e.billDate)e.billDate=toISO(e.billDate);});}
+
 normalizeEntries();
 localStorage.setItem('financeTrackerData',JSON.stringify(entries));
 
@@ -1195,6 +1238,8 @@ localStorage.setItem('financeTrackerData',JSON.stringify(entries));
 let TODAY = new Date();
 let vY = TODAY.getFullYear(), vM = TODAY.getMonth();
 let editId=null, editRecId=null, editHoldId=null;
+let _invUnitsManual=false, _invPxAuto=true, _invInstId=null, _invFetchedFor={};
+let _lastSync='idle';   // last cloud status (read by the auto-retry listeners)
 let histLim=30;
 
 // ═══════════════════════════════════════════════
@@ -1204,6 +1249,7 @@ document.getElementById('eur-r-inp').value  = eurRate;
 document.getElementById('exp-inc-inp').value = expInc;
 document.getElementById('date').value  = localISO(new Date());
 buildTplUI();
+recomputeUnits();
 applyTheme(localStorage.getItem('financeTrackerTheme')||'dark');
 setSyncStatus(urlOk()?'idle':'error', urlOk()?'☁️ Ready':'⚠️ Set URL');
 
@@ -1252,15 +1298,68 @@ function updMNav(){
 // FORM HANDLERS
 // ═══════════════════════════════════════════════
 function handleTypeChange(){
-  const t=document.getElementById('type').value;
-  document.getElementById('cc-box').style.display=(t==='Credit Card'||t==='Existing Debt Setup')?'block':'none';
-  toggleEur();updateCCPre();showInvBox();
+  const t=g('type').value;
+  g('cc-box').style.display=isCardT(t)?'block':'none';
+  g('cc-bill-wrap').style.display=t==='Card Credit'?'block':'none';
+  if(t==='Card Credit')fillBillOptions();
+  toggleEur();updateCCPre();showInvBox();renderPresetChips();
 }
+function onCardChange(){if(g('type').value==='Card Credit')fillBillOptions();updateCCPre();}
 function showInvBox(){
-  const t=document.getElementById('type').value, cur=document.getElementById('currency').value;
+  const t=g('type').value,cur=g('currency').value;
   const show=(t==='Investment'&&cur!=='EUR');
-  document.getElementById('inv-box').style.display=show?'block':'none';
-  if(!show){document.getElementById('inv-manual').checked=false;document.getElementById('inv-price-wrap').style.display='none';document.getElementById('inv-price').value='';}
+  g('inv-box').style.display=show?'block':'none';
+  if(show)invPreview();
+}
+function resetInvForm(){_invUnitsManual=false;_invPxAuto=true;_invInstId=null;_invFetchedFor={};g('inv-price').value='';g('inv-units').value='';g('inv-prev').innerHTML='';}
+// ── Investment form: live "what will this buy" preview ──
+// Shows the price that will be used and the units you'll receive BEFORE saving.
+// The price defaults to the instrument's last known price (refreshed in the
+// background once per form); type your own to override. Units follow the chosen
+// rounding until you type the broker's figure, which is then kept exactly.
+function invPreview(){
+  const box=g('inv-box');if(!box||box.style.display==='none')return;
+  const inst=matchTracked(g('label').value);
+  const ut=(inst&&inst.unitType)||'口';
+  if(inst&&_invInstId!==inst.id){
+    _invInstId=inst.id;
+    // funds: always the broker rule; stocks: whatever you used last for this instrument
+    if(!editId){
+      let m='up';
+      if(ut==='株'){const last=entries.filter(e=>e.type==='Investment'&&matchTracked(e.label)===inst&&['up','down','auto','none'].includes(e.unitRound)).sort((a,b)=>b.id-a.id)[0];m=last?last.unitRound:'down';}
+      g('inv-round').value=m;
+    }
+  }
+  const upd=inst&&inst.updated,fresh=upd===localISO(TODAY);
+  g('inv-inst').innerHTML=inst
+    ? `<b style="color:var(--text);">${esc(inst.name)}</b> · ${ut==='株'?'stock (株)':'fund (口)'}`+(inst.price?` · last ¥${Number(inst.price).toLocaleString()} <span class="${fresh?'':'orange'}">${upd?'('+upd+')':''}</span>`:'')
+    : 'No tracked instrument matches this label — enter the price yourself.';
+  g('inv-px-unit').innerText=ut==='株'?'(per share)':'(per 10,000口)';
+  g('inv-units-sfx').innerText=ut;
+  if(_invPxAuto&&inst&&inst.price>0)g('inv-price').value=inst.price;
+  if(_invPxAuto&&!editId&&inst&&inst.ticker&&!_invFetchedFor[inst.id]){_invFetchedFor[inst.id]=1;invFetchPrice(true);}
+  const amt=Math.abs(parseFloat(g('amount').value)||0),px=parseFloat(g('inv-price').value),mode=g('inv-round').value;
+  g('inv-units-auto').style.display=_invUnitsManual?'':'none';
+  let u=null;
+  if(_invUnitsManual){const t=parseFloat(g('inv-units').value);u=t>0?fromBrokerUnits(t,ut):null;}
+  else{u=calcUnits(amt,px,mode,ut);g('inv-units').value=u!=null?toBrokerUnits(u,ut):'';}
+  const pv=g('inv-prev');
+  if(!(amt>0)||!(px>0)||u==null){pv.innerHTML=amt>0&&!(px>0)?'<span class="muted">Enter the unit price to see how many units this buys.</span>':'';return;}
+  const val=u*px,diff=val-amt;
+  const note=_invUnitsManual?'Units typed by hand (broker-confirmed) — saved exactly as entered.'
+    :(Math.abs(diff)<0.05?'Exact — no rounding needed.':`${mode==='up'?'Broker rule':'Rounding'}: worth ${diff>0?'+':'−'}¥${Math.abs(diff).toLocaleString(undefined,{maximumFractionDigits:1})} vs. the ¥${amt.toLocaleString()} paid.`);
+  pv.innerHTML=`You get <b>${fmtUnits(u,ut)}</b> — worth <b>¥${val.toLocaleString(undefined,{maximumFractionDigits:1})}</b> at ¥${px.toLocaleString()}${ut==='株'?' / share':' per 10,000口'}<div class="muted" style="font-size:.68rem;margin-top:2px;">${note}</div>`;
+}
+async function invFetchPrice(silent){
+  const inst=matchTracked(g('label').value);
+  if(!inst||!inst.ticker){if(!silent)alert('No tracked instrument with a ticker matches this label. Enter the price by hand.');return;}
+  const b=g('inv-fetch');if(b)b.innerText='…';
+  try{
+    const r=await fetchTickerPrice(inst.ticker);
+    inst.price=r.price;inst.prevClose=r.prevClose;inst.updated=localISO(new Date());persistLocal();
+    if(!silent)_invPxAuto=true;
+  }catch(e){if(!silent)alert("Couldn't fetch the price right now — enter it by hand.");}
+  finally{if(b)b.innerText='↻ Price';invPreview();}
 }
 function onDateChange(){
   const eod=new Date();eod.setHours(23,59,59,999);
@@ -1292,131 +1391,267 @@ function calcEur(){
 // ═══════════════════════════════════════════════
 // CC BILLING DATE
 // ═══════════════════════════════════════════════
+// ── Japanese bank holidays ──
+// Official national holidays (内閣府) + the banks' year-end closure (12/31–1/3).
+// Card debits and business-day shifts skip these exactly like weekends. Extend the
+// list once a year (the Cabinet Office publishes the next year's dates each
+// February); dates past the list fall back to weekend-only handling.
+// Kept inside a function (not a top-level const) so boot-time callers can't hit a TDZ.
+function jpHolidays(){
+  if(!jpHolidays._s)jpHolidays._s=new Set([
+    '2026-01-01','2026-01-02','2026-01-03','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29',
+    '2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22',
+    '2026-09-23','2026-10-12','2026-11-03','2026-11-23','2026-12-31',
+    '2027-01-01','2027-01-02','2027-01-03','2027-01-11','2027-02-11','2027-02-23','2027-03-21','2027-03-22',
+    '2027-04-29','2027-05-03','2027-05-04','2027-05-05','2027-07-19','2027-08-11','2027-09-20','2027-09-23',
+    '2027-10-11','2027-11-03','2027-11-23','2027-12-31',
+    '2028-01-01','2028-01-02','2028-01-03','2028-01-10','2028-02-11','2028-02-23','2028-03-20','2028-04-29',
+    '2028-05-03','2028-05-04','2028-05-05','2028-07-17','2028-08-11','2028-09-18','2028-09-22','2028-10-09',
+    '2028-11-03','2028-11-23','2028-12-31'
+  ]);
+  return jpHolidays._s;
+}
+function isBizDay(d){const w=d.getDay();return w!==0&&w!==6&&!jpHolidays().has(localISO(d));}
+// the first business day on/after y-m-d (card bill dates)
 function adjDate(y,m,d){
   const dt=new Date(y,m,d);
-  if(dt.getDay()===6)dt.setDate(dt.getDate()+2);
-  else if(dt.getDay()===0)dt.setDate(dt.getDate()+1);
+  for(let i=0;i<10&&!isBizDay(dt);i++)dt.setDate(dt.getDate()+1);
   return dt;
 }
 function fmt(d){return`${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;}
 
+// Bill-day group per card. PayPay and Amazon bill the whole calendar month on
+// the 27th of the next month; Joyo cuts off on the 15th and bills the 10th.
+function cardDay(cc){return (cc==='PayPay'||cc==='Amazon')?27:10;}
+function billDateFor(dateStr,cc){
+  const d=new Date(dateStr+'T00:00:00');if(isNaN(d))return null;
+  if(cardDay(cc)===27)return adjDate(d.getFullYear(),d.getMonth()+1,27);
+  return adjDate(d.getFullYear(),d.getDate()<=15?d.getMonth()+1:d.getMonth()+2,10);
+}
 function getBillDate(e){
   if(!e.ccType||!e.date)return null;
-  const d=new Date(e.date+'T00:00:00');
-  if(e.ccType==='PayPay')return adjDate(d.getFullYear(),d.getMonth()+1,27);
-  const bm=d.getDate()<=15?d.getMonth()+1:d.getMonth()+2;
-  return adjDate(d.getFullYear(),bm,10);
+  // a refund / credit reduces the specific bill the user picked
+  if(e.type==='Card Credit'&&e.billDate){const b=new Date(e.billDate+'T00:00:00');if(!isNaN(b))return b;}
+  return billDateFor(e.date,e.ccType);
 }
 
-function updateCCPre(){
-  const t=document.getElementById('type').value;
-  if(t!=='Credit Card'&&t!=='Existing Debt Setup')return;
-  const d=new Date(document.getElementById('date').value+'T00:00:00');if(isNaN(d))return;
-  const card=document.getElementById('cc-type').value;
-  if(card==='PayPay'){
-    const pd=adjDate(d.getFullYear(),d.getMonth()+1,27);
-    document.getElementById('cc-pre').innerText=`Bills: ${fmt(pd)} — deducted from current salary.`;
-  }else{
-    const bm=d.getDate()<=15?d.getMonth()+1:d.getMonth()+2;
-    const pd=adjDate(d.getFullYear(),bm,10);
-    document.getElementById('cc-pre').innerText=`Bills: ${fmt(pd)} — deducted from prev salary.`;
+// ── Refund carry-over ──
+// A refund / credit lowers the bill it was applied to. If it is bigger than what
+// that bill owes, the rest carries to the card's next bill(s) — the way the card
+// company nets it. A bill whose purchase period is still open takes the whole
+// remainder (purchases still to come will absorb it); once that period closes,
+// anything it can't absorb moves on again. Only the calculations are split —
+// the ledger keeps the single refund entry.
+function nominalBill(cc,iso){            // [year, month] of the bill's nominal 27th / 10th
+  const d=new Date(iso+'T00:00:00');let y=d.getFullYear(),m=d.getMonth();
+  if(cardDay(cc)===27&&d.getDate()<15){m--;if(m<0){m=11;y--;}}
+  return [y,m];
+}
+function nextBillISO(cc,iso){const [y,m]=nominalBill(cc,iso);return localISO(adjDate(y,m+1,cardDay(cc)));}
+function billPeriodClosed(cc,iso){
+  const [y,m]=nominalBill(cc,iso);
+  const end=cardDay(cc)===27?new Date(y,m,0,23,59,59,999):new Date(y,m-1,15,23,59,59,999);
+  return end<new Date(TODAY.getFullYear(),TODAY.getMonth(),TODAY.getDate());
+}
+// {creditId: [{iso, amt}, …]} — how each credit is spread over bills
+function creditSlices(){
+  const owed={},credits=[];
+  for(const e of entries){
+    if(!isCardT(e.type)||!e.ccType||!e.date)continue;
+    if(e.type==='Card Credit'){credits.push(e);continue;}
+    const bd=getBillDate(e);if(!bd)continue;
+    const k=e.ccType+'|'+localISO(bd);
+    owed[k]=(owed[k]||0)-(e.currency==='EUR'?e.amount*(e.purchaseRate||eurRate):e.amount);
   }
+  const out={};
+  credits.sort((a,b)=>(a.billDate||a.date||'').localeCompare(b.billDate||b.date||'')||a.id-b.id);
+  for(const c of credits){
+    const bd=getBillDate(c);if(!bd)continue;
+    let iso=localISO(bd),left=c.currency==='EUR'?c.amount*(c.purchaseRate||eurRate):c.amount;
+    const sl=[];
+    for(let i=0;i<24&&left>0.5;i++){
+      const k=c.ccType+'|'+iso;
+      const take=(!billPeriodClosed(c.ccType,iso)||i===23)?left:Math.min(left,Math.max(0,owed[k]||0));
+      if(take>0){sl.push({iso,amt:take});owed[k]=(owed[k]||0)-take;left-=take;}
+      if(left>0.5)iso=nextBillISO(c.ccType,iso);
+    }
+    out[c.id]=sl;
+  }
+  return out;
+}
+// the ledger as the maths sees it: each credit replaced by its per-bill slices
+function calcEntries(){
+  if(!entries.some(e=>e.type==='Card Credit'))return entries;
+  const sl=creditSlices(),out=[];
+  for(const e of entries){
+    if(e.type!=='Card Credit'||!sl[e.id]){out.push(e);continue;}
+    sl[e.id].forEach((s,i)=>out.push(Object.assign({},e,{amount:s.amt,currency:'JPY',purchaseRate:null,billDate:s.iso,_carried:i>0,_from:e.billDate})));
+  }
+  return out;
+}
+// what a card's bill on `iso` totals right now (purchases − credits), optionally
+// leaving one entry out (the one being edited)
+function billTotal(cc,iso,exceptId){
+  let t=0;
+  for(const e of calcEntries()){
+    if(e.id===exceptId||!isCardT(e.type)||e.ccType!==cc)continue;
+    const bd=getBillDate(e);if(!bd||localISO(bd)!==iso)continue;
+    t+=-(e.currency==='EUR'?e.amount*(e.purchaseRate||eurRate):e.amount);
+  }
+  return t;
+}
+// the refund form's "Apply to which bill?" list: that card's bills 4 months back … 3 ahead
+function fillBillOptions(keepISO){
+  const sel=g('cc-bill'),cc=g('cc-type').value,cur=keepISO||sel.value,t0=localISO(TODAY);
+  const dates=[];
+  for(let i=-4;i<=3;i++){const d=new Date(TODAY.getFullYear(),TODAY.getMonth()+i,1);dates.push(localISO(adjDate(d.getFullYear(),d.getMonth(),cardDay(cc))));}
+  if(cur&&!dates.includes(cur)){dates.push(cur);dates.sort();}
+  const def=(cur&&dates.includes(cur))?cur:(dates.find(x=>x>=t0)||dates[dates.length-1]);
+  sel.innerHTML=dates.map(iso=>{const d=new Date(iso+'T00:00:00');
+    return `<option value="${iso}"${iso===def?' selected':''}>${MS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} · ${jpy(billTotal(cc,iso,editId))}${iso<t0?' · paid':''}</option>`;}).join('');
+}
+// "Whole bill": credit exactly what that bill currently totals (→ the bill becomes ¥0)
+function coverWholeBill(){const iso=g('cc-bill').value;if(!iso)return;g('amount').value=Math.max(0,Math.round(billTotal(g('cc-type').value,iso,editId)));updateCCPre();}
+// shortcut from a dashboard bill card
+function openCardCredit(cc){
+  if(editId)cancelEdit();
+  openForm();
+  g('type').value='Card Credit';g('cc-type').value=cc;
+  if(!g('label').value)g('label').value='Refund';
+  handleTypeChange();
+}
+function updateCCPre(){
+  const t=g('type').value;if(!isCardT(t))return;
+  const card=g('cc-type').value,pre=g('cc-pre');
+  if(t==='Card Credit'){
+    const iso=g('cc-bill').value;
+    pre.innerHTML=iso?`Lowers the ${esc(card)} bill due <b>${fmt(new Date(iso+'T00:00:00'))}</b> (now ${jpy(billTotal(card,iso,editId))}). Nothing is deleted — the purchase and this credit both stay in your history. If the credit is bigger than that bill, the rest carries to the next ${esc(card)} bill(s) automatically.`:'';
+    return;
+  }
+  const pd=billDateFor(g('date').value,card);if(!pd)return;
+  pre.innerText=`Bills ${fmt(pd)} — `+(cardDay(card)===27?'the whole month is billed together.':'purchases up to the 15th.');
 }
 document.getElementById('date').addEventListener('change',updateCCPre);
 
-function calcBillCycle(dateStr,ccType){
+// short label stored with each card row ("Sep 27 Bill") — the NOMINAL bill day,
+// even when a weekend/holiday pushed the actual debit later
+function calcBillCycle(dateStr,ccType,billISO){
   if(!ccType)return'Immediate/Cash';
-  const d=new Date(dateStr+'T00:00:00');
-  let mIdx,day,y=d.getFullYear();
-  if(ccType==='PayPay'){mIdx=d.getMonth()+1;day=27;}
-  else{mIdx=d.getDate()<=15?d.getMonth()+1:d.getMonth()+2;day=10;}
-  if(mIdx>11){mIdx-=12;y++;}
-  return`${MS[mIdx]} ${day} Bill`;
+  const bd=billISO?new Date(billISO+'T00:00:00'):billDateFor(dateStr,ccType);
+  if(!bd||isNaN(bd))return'Immediate/Cash';
+  let m=bd.getMonth();
+  if(cardDay(ccType)===27&&bd.getDate()<15)m=(m+11)%12;   // a 27th pushed into the next month
+  return`${MS[m]} ${cardDay(ccType)} Bill`;
 }
 
 // ═══════════════════════════════════════════════
 // ENTRY CRUD
 // ═══════════════════════════════════════════════
 async function addEntry(){
-  const type=document.getElementById('type').value;
-  const lbl=document.getElementById('label').value.trim();
-  const rawAmt=parseFloat(document.getElementById('amount').value);
-  const cur=document.getElementById('currency').value;
-  const date=document.getElementById('date').value;
-  const ccType=(type==='Credit Card'||type==='Existing Debt Setup')?document.getElementById('cc-type').value:null;
+  const type=g('type').value;
+  const lbl=g('label').value.trim();
+  const rawAmt=parseFloat(g('amount').value);
+  const cur=g('currency').value;
+  const date=g('date').value;
+  const ccType=isCardT(type)?g('cc-type').value:null;
   if(!lbl||isNaN(rawAmt)||!date){alert("Please fill Label, Amount, and Date.");return;}
-  const isInc=type==='Salary/Bonus'||type==='Extra Allowance';
+  const isInc=isIncomeT(type);
   const isAsset=type==='Current Cash Setup';
-  let amt=rawAmt;if(!isInc&&!isAsset)amt=-Math.abs(rawAmt);
+  const isCredit=type==='Card Credit';
+  let amt=rawAmt;
+  if(isCredit)amt=Math.abs(rawAmt);                       // a credit is money back on the card
+  else if(!isInc&&!isAsset)amt=-Math.abs(rawAmt);
   let pRate=null;
   if(cur==='EUR'&&!isAsset){
-    const exactTotal=parseFloat(document.getElementById('eur-total').value);
+    const exactTotal=parseFloat(g('eur-total').value);
     const eurAmt=Math.abs(rawAmt);
-    pRate=(exactTotal>0&&eurAmt>0)?(exactTotal/eurAmt):(parseFloat(document.getElementById('pur-rate').value)||eurRate);
+    pRate=(exactTotal>0&&eurAmt>0)?(exactTotal/eurAmt):(parseFloat(g('pur-rate').value)||eurRate);
   }
-  const entry={id:editId||Date.now(),type,label:lbl,amount:amt,currency:cur,purchaseRate:pRate,date,ccType,billingCycle:calcBillCycle(date,ccType)};
+  const billISO=isCredit?(g('cc-bill').value||null):null;
+  if(isCredit&&!billISO){alert("Pick which bill this refund / credit reduces.");return;}
+  const entry={id:editId||Date.now(),type,label:lbl,amount:amt,currency:cur,purchaseRate:pRate,date,ccType,billingCycle:calcBillCycle(date,ccType,billISO)};
+  if(billISO)entry.billDate=billISO;
 
-  // ── price + units for a tracked investment ──
+  // ── price + units for an investment (what the preview showed is what's saved) ──
   if(type==='Investment'&&cur!=='EUR'){
-    const rmode=document.getElementById('inv-round').value;
-    localStorage.setItem('financeTrackerUnitRound',rmode);   // remember the choice for next time
-    entry.unitRound=rmode;
     const inst=matchTracked(lbl);
     const utype=(inst&&inst.unitType)||'口';   // 口 for 投資信託, 株 for stocks
-    const scale=unitScale(utype);
-    entry.unitType=utype;
-    const manualOn=document.getElementById('inv-manual').checked;
-    const manualPx=parseFloat(document.getElementById('inv-price').value);
-    if(manualOn&&manualPx>0){
-      entry.unitPrice=manualPx;entry.units=roundUnits(Math.abs(amt)/manualPx,rmode,scale);   // use the hand-entered NAV/price
-    } else {
-      if(inst&&inst.ticker){
-        const sb=document.getElementById('sub-btn');const old=sb.innerText;sb.innerText='⏳ Pricing…';sb.disabled=true;
-        let px=null;
-        try{const r=await fetchTickerPrice(inst.ticker);px=r.price;inst.price=r.price;inst.prevClose=r.prevClose;inst.updated=localISO(new Date());}
-        catch{px=inst.price||null;}                       // fall back to last known price
-        if(px&&px>0){entry.unitPrice=px;entry.units=roundUnits(Math.abs(amt)/px,rmode,scale);}
-        sb.disabled=false;sb.innerText=old;
-      }
+    const rmode=g('inv-round').value;
+    entry.unitType=utype;entry.unitRound=rmode;
+    let px=parseFloat(g('inv-price').value);
+    if(!(px>0)&&inst&&inst.ticker){
+      const sb=g('sub-btn');const old=sb.innerText;sb.innerText='Pricing…';sb.disabled=true;
+      try{const r=await fetchTickerPrice(inst.ticker);px=r.price;inst.price=r.price;inst.prevClose=r.prevClose;inst.updated=localISO(new Date());}
+      catch{px=inst.price||null;}                        // fall back to the last known price
+      sb.disabled=false;sb.innerText=old;
+    }
+    if(px>0){
+      entry.unitPrice=px;
+      const typed=parseFloat(g('inv-units').value);
+      if(_invUnitsManual&&typed>0){entry.units=fromBrokerUnits(typed,utype);entry.unitRound='manual';}
+      else entry.units=calcUnits(Math.abs(amt),px,rmode,utype);
     }
   }
 
   if(editId){entries[entries.findIndex(e=>e.id===editId)]=entry;cancelEdit();}
   else entries.push(entry);
-  document.getElementById('inv-manual').checked=false;
-  document.getElementById('inv-price-wrap').style.display='none';
-  document.getElementById('inv-price').value='';
-  document.getElementById('eur-total').value='';
-  closeSB();   // dismiss the mobile slide-out + scrim after a save (Bug A)
+  resetInvForm();
+  g('eur-total').value='';
+  closeSB();   // dismiss the sheet + scrim after a save (Bug A)
   saveRender();
 }
 function triggerEdit(id){
   const e=entries.find(x=>x.id===id);if(!e)return;
   editId=id;
-  document.getElementById('form-title').innerText='Modify Entry';
-  document.getElementById('sub-btn').innerText='💾 Update';
-  document.getElementById('can-btn').style.display='block';
-  document.getElementById('type').value=e.type;
-  document.getElementById('label').value=e.label;
-  document.getElementById('amount').value=Math.abs(e.amount);
-  document.getElementById('currency').value=e.currency;
-  document.getElementById('date').value=e.date;
-  if(e.ccType)document.getElementById('cc-type').value=e.ccType;
-  if(e.purchaseRate)document.getElementById('pur-rate').value=e.purchaseRate;
+  g('form-title').innerText='Modify Entry';
+  g('sub-btn').innerText='Update';
+  g('can-btn').style.display='block';
+  g('type').value=e.type;
+  g('label').value=e.label;
+  g('amount').value=Math.abs(e.amount);
+  g('currency').value=e.currency;
+  g('date').value=e.date;
+  if(e.ccType)g('cc-type').value=e.ccType;
+  if(e.purchaseRate)g('pur-rate').value=e.purchaseRate;
+  resetInvForm();
+  if(e.type==='Investment'&&e.currency!=='EUR'){
+    const inst=matchTracked(e.label),ut=e.unitType||(inst&&inst.unitType)||'口';
+    _invPxAuto=false;_invInstId=inst?inst.id:null;
+    g('inv-price').value=e.unitPrice||'';
+    g('inv-round').value=['up','down','auto','none'].includes(e.unitRound)?e.unitRound:'up';
+    _invUnitsManual=e.unitRound==='manual'&&e.units>0;
+    g('inv-units').value=e.units!=null?toBrokerUnits(e.units,ut):'';
+  }
   handleTypeChange();
-  const sb=document.getElementById('sidebar');sb.classList.add('open');
+  if(e.type==='Card Credit'){fillBillOptions(e.billDate);updateCCPre();}
+  const sb=g('sidebar');sb.classList.add('open');
+  g('overlay').classList.add('show');
   sb.scrollTo({top:0,behavior:'smooth'});
+}
+// log the same thing again today (Paypay Charge, Pasmo Charge, …)
+function repeatEntry(id){
+  const e=entries.find(x=>x.id===id);if(!e)return;
+  if(editId)cancelEdit();
+  resetInvForm();
+  g('type').value=e.type==='Existing Debt Setup'?'Credit Card':e.type;
+  g('label').value=e.label||'';
+  g('amount').value=Math.abs(e.amount);
+  g('currency').value=e.currency||'JPY';
+  if(e.ccType)g('cc-type').value=e.ccType;
+  g('date').value=localISO(new Date());
+  onDateChange();handleTypeChange();openForm();
 }
 function cancelEdit(){
   editId=null;
-  document.getElementById('form-title').innerText='Transaction Input';
-  document.getElementById('sub-btn').innerText='💾 Save Entry';
-  document.getElementById('can-btn').style.display='none';
-  document.getElementById('label').value='';
-  document.getElementById('amount').value='';
-  document.getElementById('date').value=localISO(new Date());
-  document.getElementById('ftag').style.display='none';
-  closeSB();   // also dismiss the slide-out + scrim on explicit cancel (Bug A)
+  g('form-title').innerText='Transaction Input';
+  g('sub-btn').innerText='💾 Save Entry';
+  g('can-btn').style.display='none';
+  g('label').value='';
+  g('amount').value='';
+  g('date').value=localISO(new Date());
+  g('ftag').style.display='none';
+  resetInvForm();
+  closeSB();   // also dismiss the sheet + scrim on explicit cancel (Bug A)
   handleTypeChange();
 }
 function delEntry(id){
@@ -1434,6 +1669,7 @@ function clearData(){if(confirm("Wipe ALL transaction history? This cannot be un
 // ── persist EVERYTHING locally, and (debounced) push the full state to the cloud ──
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function setSyncStatus(state,msg){
+  _lastSync=state;
   const el=document.getElementById('sync-status');if(!el)return;
   const map={saved:['✅ Saved','#1e3a2a','var(--green)'],saving:['⏳ Saving…','#2a2f3a','var(--muted)'],
              error:['⚠️ Not synced','#3a261e','var(--red)'],idle:['☁️ —','#2a2f3a','var(--muted)']};
@@ -1469,6 +1705,7 @@ function persistLocal(){
   localStorage.setItem('financeTrackerEurRate',eurRate);
   localStorage.setItem('financeTrackerExpInc',expInc);
   localStorage.setItem('financeTrackerForecastVars',JSON.stringify(forecastVars));
+  if(Array.isArray(presets))localStorage.setItem('financeTrackerPresets',JSON.stringify(presets));
   localStorage.setItem('financeTrackerCloudUrl',CLOUD_URL);
   localStorage.setItem('financeTrackerRev',cloudRev);
   localStorage.setItem('financeTrackerNisaCap',nisaCap);
@@ -1482,24 +1719,62 @@ function gurl(extra){return CLOUD_URL+(CLOUD_URL.indexOf('?')>=0?'&':'?')+'token
 function cloudPayload(force){
   const prices={};entries.forEach(e=>{if(e.unitPrice)prices[String(e.id)]=e.unitPrice;});
   return {action:'syncAll',entries,recurring:recItems,holdings,defaults:dflts,
-          tracked:trackedInv,snapshots,prices,eurRate,expInc,nisaCap,forecastVars,baseRev:cloudRev,force:!!force,token:cloudToken,paydayOverrides};
+          tracked:trackedInv,snapshots,prices,eurRate,expInc,nisaCap,forecastVars,presets:Array.isArray(presets)?presets:undefined,baseRev:cloudRev,force:!!force,token:cloudToken,paydayOverrides};
 }
 function urlOk(){return CLOUD_URL&&CLOUD_URL.startsWith('https://script.google.com');}
-// returns 'ok' on success, 'conflict' if cloud changed elsewhere, false on failure
-async function pushCloud(force){
-  if(!urlOk()){setSyncStatus('error','⚠️ No URL');return false;}
-  setSyncStatus('saving');
+function _sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+// fetch + JSON with a hard timeout, so a hung Apps Script call can never wedge the sync
+async function fetchJSON(url,opts,ms){
+  const c=new AbortController();const t=setTimeout(()=>c.abort(),ms||30000);
   try{
-    const res=await fetch(CLOUD_URL,{method:'POST',body:JSON.stringify(cloudPayload(force)),headers:{'Content-Type':'text/plain;charset=utf-8'}});
-    const out=await res.json().catch(()=>({}));
-    if(out&&out.conflict){setSyncStatus('error','⚠️ Conflict — tap');return 'conflict';}
-    if(out&&out.error)throw new Error(out.error);
-    if(out&&out.rev!=null){cloudRev=out.rev;localStorage.setItem('financeTrackerRev',cloudRev);}
-    setSyncStatus('saved');return 'ok';
-  }catch(err){setSyncStatus('error');return false;}
+    const res=await fetch(url,Object.assign({},opts||{},{signal:c.signal}));
+    const txt=await res.text();
+    try{return JSON.parse(txt);}catch(_){throw new Error(res.ok?'reply was not JSON':'HTTP '+res.status);}
+  }catch(err){throw (err&&err.name==='AbortError')?new Error('timed out'):err;}
+  finally{clearTimeout(t);}
+}
+// Returns 'ok' | 'conflict' | false.
+// Why sync "sometimes failed and then worked a moment later": pushes could OVERLAP
+// (an auto-save fired while the previous one was still in flight), so the second
+// carried a stale revision and bounced as a false conflict; and one-off network /
+// Apps Script hiccups had no retry. Now pushes run one at a time, transient failures
+// retry with back-off, and every attempt carries the same pushId so the script
+// recognises a retry of a push that already landed (v3.8) instead of refusing it.
+let _pushing=null,_retryT=null;
+async function pushCloud(force){
+  if(!urlOk()){setSyncStatus('error','No cloud URL set');return false;}
+  while(_pushing){try{await _pushing;}catch(_){}}   // wait for the one in flight
+  const run=_pushOnce(force);_pushing=run;
+  try{return await run;}finally{if(_pushing===run)_pushing=null;}
+}
+async function _pushOnce(force){
+  clearTimeout(_retryT);
+  setSyncStatus('saving');
+  const body=cloudPayload(force);
+  body.pushId=Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+  let lastErr='';
+  for(let attempt=0;attempt<3;attempt++){
+    if(attempt)await _sleep(attempt===1?1500:4500);
+    try{
+      const out=await fetchJSON(CLOUD_URL,{method:'POST',body:JSON.stringify(body),headers:{'Content-Type':'text/plain;charset=utf-8'}},35000);
+      if(out&&out.conflict){setSyncStatus('error','Conflict — sync to resolve');return 'conflict';}
+      if(out&&out.error){
+        if(out.error==='unauthorized'){setSyncStatus('error','Access token rejected');return false;}
+        lastErr=out.error;continue;                  // "busy" / sheet timeouts → retry
+      }
+      if(out&&out.rev!=null){cloudRev=out.rev;localStorage.setItem('financeTrackerRev',cloudRev);}
+      setSyncStatus('saved');return 'ok';
+    }catch(err){lastErr=(err&&err.message)||String(err);}
+  }
+  setSyncStatus('error','Not synced ('+lastErr+') — will retry');
+  _retryT=setTimeout(()=>{if(navigator.onLine!==false)pushCloud(false);},45000);
+  return false;
 }
 let _cpT=null;
-function scheduleCloudPush(){clearTimeout(_cpT);setSyncStatus('saving');_cpT=setTimeout(()=>pushCloud(false),700);}
+function scheduleCloudPush(){clearTimeout(_cpT);setSyncStatus('saving');_cpT=setTimeout(()=>{_cpT=null;pushCloud(false);},700);}
+// retry unsent changes as soon as the phone is back online / the app is reopened
+window.addEventListener('online',()=>{if(_lastSync==='error'&&urlOk())pushCloud(false);});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&_lastSync==='error'&&urlOk())pushCloud(false);});
 function persist(){persistLocal();scheduleCloudPush();}
 
 async function saveRender(){
@@ -1528,11 +1803,26 @@ async function syncCloud(){
   const btn=document.getElementById('sync-btn');btn.innerText="⏳...";
   showLoader('Fetching from the cloud');
   try{
-    const res=await fetch(gurl());const data=await res.json();
+    // unsent local changes go up FIRST — a pull would otherwise overwrite them
+    if(_cpT||_lastSync==='saving'||_lastSync==='error'){
+      clearTimeout(_cpT);_cpT=null;
+      const pr=await pushCloud(false);
+      if(pr===false&&!await uiConfirm("Your latest changes on this device haven't reached the cloud yet. Pull the cloud copy anyway? (Those unsent changes would be replaced.)")){btn.innerText="☁️ Sync";return false;}
+    }
+    let data=null,lastErr=null;
+    for(let i=0;i<3&&!data;i++){
+      if(i)await _sleep(i===1?1500:4500);
+      try{data=await fetchJSON(gurl(),{},35000);}catch(err){lastErr=err;}
+    }
+    if(!data)throw lastErr||new Error('no reply');
     if(data&&data.error==='unauthorized')throw new Error("Access token rejected. Check ⚙️ Cloud → Access token.");
     if(data&&data.error)throw new Error(data.error);
+    // refunds (bill date) + broker-confirmed units need the v3.8 script columns
+    {const v=parseFloat(String((data&&data.version)||'').replace(/[^\d.]/g,''));
+     let warned=false;try{warned=!!sessionStorage.getItem('mtVerWarn');sessionStorage.setItem('mtVerWarn','1');}catch(_){}
+     if(v&&v<3.8&&!warned)alert("Your cloud script is "+data.version+". Please paste the new Kod.gs (v3.8) and deploy it as a New version — card refunds and broker-confirmed units are only saved correctly with v3.8.");}
     const ents=Array.isArray(data)?data:(data.entries||[]);
-    const cleaned=ents.filter(e=>e.id).map(e=>{e.date=toISO(e.date);return e;});
+    const cleaned=ents.filter(e=>e.id).map(e=>{e.date=toISO(e.date);migrateType(e);if(e.billDate)e.billDate=toISO(e.billDate);if(e.units===''||e.units===null)delete e.units;return e;});
     // safety: don't silently wipe local data if the cloud came back empty
     if(cleaned.length===0&&entries.length>0){
       if(!confirm("The cloud returned no transactions, but you have local data. Pull anyway? (This replaces your local data with the empty cloud copy.)")){
@@ -1542,11 +1832,12 @@ async function syncCloud(){
     entries=cleaned;
     if(!Array.isArray(data)){
       if(data.rev!=null){cloudRev=data.rev;localStorage.setItem('financeTrackerRev',cloudRev);}
+      if(Array.isArray(data.tracked))  trackedInv=data.tracked;   // before units: matching needs the instruments
       const prices=data.prices||{};
-      entries.forEach(e=>{const p=prices[String(e.id)];if(p){e.unitPrice=p;if(e.type==='Investment'&&e.currency!=='EUR'){const inst=matchTracked(e.label);const ut=e.unitType||(inst&&inst.unitType)||'口';e.units=roundUnits(Math.abs(e.amount)/p,e.unitRound||'auto',unitScale(ut));}}});
+      entries.forEach(e=>{const p=prices[String(e.id)];if(p)e.unitPrice=p;});
+      recomputeUnits();
       if(Array.isArray(data.recurring))recItems=data.recurring;
       if(Array.isArray(data.holdings)) holdings=data.holdings;
-      if(Array.isArray(data.tracked))  trackedInv=data.tracked;
       if(Array.isArray(data.snapshots))snapshots=data.snapshots;
       if(data.defaults&&typeof data.defaults==='object'&&Object.keys(data.defaults).length)dflts=data.defaults;
       if(data.eurRate!=null&&!isNaN(parseFloat(data.eurRate)))eurRate=parseFloat(data.eurRate);
@@ -1554,6 +1845,7 @@ async function syncCloud(){
       if(data.nisaCap!=null&&!isNaN(parseInt(data.nisaCap))&&parseInt(data.nisaCap)>0)nisaCap=parseInt(data.nisaCap);
       if(data.paydayOv&&typeof data.paydayOv==='object'){paydayOverrides=data.paydayOv;localStorage.setItem('financeTrackerPaydayOv',JSON.stringify(paydayOverrides));}
       if(Array.isArray(data.forecastVars))forecastVars=data.forecastVars;
+      if(Array.isArray(data.presets)&&data.presets.length)presets=data.presets;
     } else {
       alert("⚠️ Connected, but your Apps Script is an OLD version (it only returns transactions, not recurring/holdings). Update the script to v2.6 and redeploy a NEW version, then Sync again.");
     }
@@ -1718,8 +2010,8 @@ function occInMonth(item,year,month){
 // edit the logged entry's date manually on the rare month a date is a holiday.
 //  'back' → previous business day (e.g. 25th Sat → 24th Fri)
 //  'fwd'  → next business day     (e.g. 27th Sat → 29th Mon)
-function adjBack(d){const x=new Date(d);if(x.getDay()===0)x.setDate(x.getDate()-2);else if(x.getDay()===6)x.setDate(x.getDate()-1);return x;}
-function adjFwd(d){const x=new Date(d);if(x.getDay()===6)x.setDate(x.getDate()+2);else if(x.getDay()===0)x.setDate(x.getDate()+1);return x;}
+function adjBack(d){const x=new Date(d);for(let i=0;i<10&&!isBizDay(x);i++)x.setDate(x.getDate()-1);return x;}
+function adjFwd(d){const x=new Date(d);for(let i=0;i<10&&!isBizDay(x);i++)x.setDate(x.getDate()+1);return x;}
 // back-compat: older items only have the boolean `adjustBack`
 function weekendAdjOf(item){return item.weekendAdj||(item.adjustBack?'back':'none');}
 function applyWeekendAdj(d,mode){return mode==='back'?adjBack(d):mode==='fwd'?adjFwd(d):d;}
@@ -1743,22 +2035,32 @@ function currentPayCycle(ref){
 }
 // income + spending (cash by date, card by bill date) within a date window
 function computeCycle(start,end){
-  let income=0,spent=0,cashSub=0;const bills=[];
-  for(const e of entries){
+  let income=0,salary=0,bonus=0,addl=0,spent=0,cashSub=0;const bills=[];
+  for(const e of calcEntries()){
     if(!e.date)continue;
     const ed=new Date(e.date+'T00:00:00');
     const rate=e.purchaseRate||eurRate;
     const val=e.currency==='EUR'?e.amount*rate:e.amount;
-    if(e.type==='Salary/Bonus'||e.type==='Extra Allowance'){
-      if(ed>=start&&ed<=end)income+=val;
-    } else if(e.type==='Credit Card'||e.type==='Existing Debt Setup'){
+    if(isIncomeT(e.type)){
+      if(ed>=start&&ed<=end){income+=val;if(e.type==='Salary')salary+=val;else if(e.type==='Bonus')bonus+=val;else addl+=val;}
+    } else if(isCardT(e.type)){
       const bd=getBillDate(e);
-      if(bd&&bd>=start&&bd<=end){spent+=Math.abs(val);bills.push({label:e.label||'?',amt:Math.abs(val),due:bd,cc:e.ccType});}
+      // owed: + for purchases, − for refunds/credits on that bill
+      if(bd&&bd>=start&&bd<=end){const owed=-val;spent+=owed;bills.push({label:e.label||'?',amt:owed,due:bd,cc:e.ccType,credit:e.type==='Card Credit'});}
     } else if(e.type!=='Current Cash Setup'&&e.type!=='Investment'){
       if(ed>=start&&ed<=end){spent+=Math.abs(val);cashSub+=Math.abs(val);}
     }
   }
-  return {income,spent,cashSub,bills};
+  return {income,salary,bonus,addl,spent,cashSub,bills};
+}
+// Free-to-spend for a pay cycle. The income kinds never interact:
+//   base = max(salary received, expected salary) + bonus + additional income
+//   free = base − spending landing in the cycle (cash by date, cards by bill date)
+//          − cash recurring still due in the cycle
+function cycleLeeway(cyc){
+  const cd=computeCycle(cyc.start,cyc.end),rec=cycleRecUnpaid(cyc.start,cyc.end);
+  const salaryBase=Math.max(cd.salary,expInc),extra=cd.income-cd.salary,base=salaryBase+extra;
+  return {cd,rec,salaryBase,extra,base,leeway:base-cd.spent-rec.cash};
 }
 // unpaid CASH recurring whose due date falls within the window (card-paid excluded — billed later)
 function cycleRecUnpaid(start,end){
@@ -1953,7 +2255,7 @@ function renderRMList(){
     const nx=item.active?nextOcc(item):null;
     const ns=nx?fmt(nx):(item.active?'—':'Inactive');
     const as=item.currency==='EUR'?`€${item.amount.toLocaleString()}`:`¥${item.amount.toLocaleString()}`;
-    const ovStr=item.monthOverrides?` <span class="bdg b-bl">Overrides</span>`:'';
+    const ovStr=(item.monthOverrides&&Object.keys(item.monthOverrides).length)?` <span class="bdg b-bl">Overrides</span>`:'';
     return`<div class="rm-it ${item.active?'':'inactive'}">
       <div style="flex:1;min-width:0;">
         <div class="rm-n">${esc(item.name)}${ovStr} <span class="muted" style="font-weight:400;font-size:.72rem;">(${item.category})</span></div>
@@ -1976,57 +2278,70 @@ function fetchWithTimeout(u,ms){
   const c=new AbortController();const t=setTimeout(()=>c.abort(),ms||8000);
   return fetch(u,{signal:c.signal}).finally(()=>clearTimeout(t));
 }
-// Preferred path: fetch prices through YOUR Apps Script (Google's servers — no proxy, no cache).
-// Returns {ticker:{price,prevClose}} or null if the script isn't set up / fails.
-// Fetch via the working public proxies (corsproxy first — proven most reliable here).
-function priceProxies(targetUrl){
-  return [
-    `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-    `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(targetUrl)}`,
-    `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`
-  ];
+// ── Price sources ──
+// In the APK the sources are called DIRECTLY through Capacitor's built-in native
+// HTTP (native code has no CORS), so no public proxy is involved. On the website we
+// still need public CORS proxies — raced, so a dead one can't block the others.
+// (Refresh broke in late Aug 2026 because corsproxy.io, the proxy that used to win,
+// started requiring an API key; it has been dropped.)
+function nativeHttp(){const C=window.Capacitor;return (C&&C.isNativePlatform&&C.isNativePlatform()&&C.Plugins&&C.Plugins.CapacitorHttp)||null;}
+async function nativeGet(url,ms){
+  const H=nativeHttp();ms=ms||9000;
+  const req=H.request({url,method:'GET',responseType:'text',connectTimeout:ms,readTimeout:ms,
+    headers:{'User-Agent':'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Mobile Safari/537.36','Accept':'text/html,application/json;q=0.9,*/*;q=0.8'}});
+  const r=await Promise.race([req,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms+2000))]);
+  if(!r||r.status<200||r.status>=300)throw new Error('HTTP '+(r&&r.status));
+  return typeof r.data==='string'?r.data:JSON.stringify(r.data);
 }
-// Fire all proxies AT ONCE; resolve with the first that returns a valid parse.
-// A dead/403/slow proxy no longer blocks the others (that was the slowdown).
-function fetchFirst(urls,ms,parse){
+function priceProxies(targetUrl){
+  const e=encodeURIComponent(targetUrl);
+  return [`https://api.cors.lol/?url=${e}`,`https://api.allorigins.win/raw?url=${e}`,`https://api.codetabs.com/v1/proxy/?quest=${e}`,`https://api.allorigins.win/get?url=${e}`];
+}
+// ways to fetch one URL as text: natively in the APK, via the raced proxies on the web
+function sourceTasks(url,ms){
+  if(nativeHttp())return [()=>nativeGet(url,ms)];
+  // public proxies can be slow (allorigins often takes ~20 s for a fund page)
+  return priceProxies(url).map(u=>()=>fetchWithTimeout(u,Math.max(ms||0,25000)).then(r=>r.ok?r.text():Promise.reject(new Error('HTTP '+r.status)))
+    .then(t=>u.indexOf('/get?')>=0?JSON.parse(t).contents:t));
+}
+// resolve with the first task that yields a valid value (all fired at once)
+function firstOk(tasks){
   return new Promise((resolve,reject)=>{
-    let pending=urls.length,done=false;
-    if(!pending)return reject(new Error('no urls'));
-    urls.forEach(u=>{
-      fetchWithTimeout(u,ms)
-        .then(r=>r.ok?r.text():Promise.reject())
-        .then(text=>{
-          if(done)return;
-          let val=null;try{val=parse(text,u);}catch(e){val=null;}
-          if(val&&!done){done=true;resolve(val);}else throw 0;
-        })
-        .catch(()=>{})
-        .finally(()=>{if(--pending===0&&!done)reject(new Error('all proxies failed'));});
+    let left=tasks.length,done=false;
+    if(!left)return reject(new Error('no sources'));
+    tasks.forEach(t=>{
+      Promise.resolve().then(t).then(v=>{if(!done&&v){done=true;resolve(v);}})
+        .catch(()=>{}).finally(()=>{if(--left===0&&!done)reject(new Error('all sources failed'));});
     });
   });
 }
-async function yahooQuote(ticker){
-  const y=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5d&_=${Date.now()}`;
-  return fetchFirst(priceProxies(y),7000,(text,u)=>{
-    const json=u.indexOf('/get?')>=0?JSON.parse(JSON.parse(text).contents):JSON.parse(text);
-    const meta=json.chart.result[0].meta,price=meta.regularMarketPrice;
-    return price?{price,prevClose:meta.chartPreviousClose||meta.previousClose||price}:null;
-  });
+function parseYahoo(text){const meta=JSON.parse(text).chart.result[0].meta,price=meta.regularMarketPrice;return price?{price,prevClose:meta.chartPreviousClose||meta.previousClose||price}:null;}
+function parseKabutan(html){
+  const m=html.match(/class="kabuka">([\d,]+(?:\.\d+)?)円/);if(!m)return null;
+  const price=parseFloat(m[1].replace(/,/g,''));
+  const pm=html.match(/前日終値<\/dt>\s*<dd[^>]*>([\d,]+(?:\.\d+)?)/);
+  return price?{price,prevClose:pm?parseFloat(pm[1].replace(/,/g,'')):price}:null;
 }
-// Japanese mutual-fund NAV (基準価額) — fetched in the BROWSER via proxy + minkabu page.
+function parseMinkabuFund(html){
+  const m=html.match(/基準価額([\d,]+(?:\.\d+)?)円、前日比([+\-＋－−]?[\d,]+(?:\.\d+)?)/);
+  if(!m)return null;
+  const price=parseFloat(m[1].replace(/,/g,''));
+  let chg=parseFloat(m[2].replace(/,/g,'').replace('＋','').replace(/[－−]/,'-'));if(isNaN(chg))chg=0;
+  return price?{price,prevClose:price-chg}:null;
+}
+async function yahooQuote(ticker){
+  const q=`/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5d`;
+  const tasks=[];
+  ['query1','query2'].forEach(h=>sourceTasks(`https://${h}.finance.yahoo.com${q}`,8000).forEach(t=>tasks.push(()=>t().then(parseYahoo))));
+  // Tokyo stocks (e.g. 7167.T) also have a kabutan page — an independent second source
+  const jp=String(ticker).match(/^(\d{4}[A-Z]?)\.T$/i);
+  if(jp)sourceTasks(`https://kabutan.jp/stock/?code=${jp[1]}`,9000).forEach(t=>tasks.push(()=>t().then(parseKabutan)));
+  return firstOk(tasks);
+}
+// Japanese mutual-fund NAV (基準価額) from the minkabu fund page
 async function fundQuote(code){
   code=String(code);if(/^\d{7}$/.test(code))code='0'+code;
-  const page=`https://itf.minkabu.jp/fund/${code}`;
-  return fetchFirst(priceProxies(page),9000,(text,u)=>{
-    let html=text;if(u.indexOf('/get?')>=0){try{html=JSON.parse(text).contents;}catch(e){}}
-    const m=html.match(/基準価額([\d,]+(?:\.\d+)?)円、前日比([+\-＋－−]?[\d,]+(?:\.\d+)?)/);
-    if(!m)return null;
-    const price=parseFloat(m[1].replace(/,/g,''));
-    let chg=parseFloat(m[2].replace(/,/g,'').replace('＋','').replace(/[－−]/,'-'));
-    if(isNaN(chg))chg=0;
-    return price?{price,prevClose:price-chg}:null;
-  });
+  return firstOk(sourceTasks(`https://itf.minkabu.jp/fund/${code}`,10000).map(t=>()=>t().then(parseMinkabuFund)));
 }
 // Resolve prices in the browser: funds via fund page, stocks via Yahoo — all parallel.
 async function getPrices(tickers){
@@ -2146,22 +2461,49 @@ function renderHoldingsList(){
 async function fetchTickerPrice(ticker){
   return /^\d{7,8}$/.test(String(ticker))?fundQuote(ticker):yahooQuote(ticker);
 }
-// Unit type per instrument: 投資信託 are counted in 口 (1万口 = 10,000, units carry
-// 4 decimals); stocks (株) use a single-share price and whole-ish shares.
-function unitScale(type){return type==='株'?1:10000;}
+// Unit types. 投資信託 are counted in 口 and priced per 10,000口, so the app stores a
+// fund's units in 万口 (= amount ÷ price) and one whole 口 is 1/10,000 of that.
+// Stocks (株) are priced per share; fractional shares (持株会 / るいとう) are kept to
+// 0.001 株. unitScale() = how many rounding steps make one stored unit.
+function unitScale(type){return type==='株'?1000:10000;}
+// Round a unit count the way the broker does (mode chosen per entry).
+// 'up' is the BROKER RULE: take the whole units the money buys; if they cost LESS
+// than the amount paid, add one more — 10,000 ÷ 23,956 → 4,174口 costs ¥9,999
+// (< ¥10,000) → 4,175口 (¥10,001). An exact division stays exact: floating-point
+// noise (4174.0000001) must never bump it.
 function roundUnits(u,mode,scale){
   if(!isFinite(u))return u;
-  const f=scale||10000;
-  if(mode==='up')  return Math.ceil(u*f)/f;
-  if(mode==='down')return Math.floor(u*f)/f;
-  if(mode==='auto')return Math.round(u*f)/f;
-  return u;                              // 'none' → keep full precision
+  const f=scale||10000,x=u*f,n=Math.round(x),exact=Math.abs(x-n)<1e-6;
+  if(mode==='up')  return (exact?n:Math.ceil(x))/f;
+  if(mode==='down')return (exact?n:Math.floor(x))/f;
+  if(mode==='auto')return n/f;
+  return u;                              // 'none' / 'manual' → keep as given
 }
-// Show unit counts the broker's way: 投資信託 in 口 (= value × 10,000, e.g.
-// 0.5139 → "5,139 口"); stocks in 株 (the share count itself, e.g. "14 株").
+function calcUnits(amount,price,mode,type){return (amount>0&&price>0)?roundUnits(amount/price,mode,unitScale(type)):null;}
+// stored units ⇄ the number on your broker's statement (口 count, or shares)
+function toBrokerUnits(u,type){return type==='株'?Math.round(u*1000)/1000:Math.round(u*10000);}
+function fromBrokerUnits(n,type){return type==='株'?n:n/10000;}
 function fmtUnits(u,type){
-  if(type==='株')return u.toLocaleString(undefined,{maximumFractionDigits:4})+' 株';
+  if(type==='株')return u.toLocaleString(undefined,{maximumFractionDigits:3})+' 株';
   return Math.round(u*10000).toLocaleString()+' 口';
+}
+// (Re)derive units for every priced, non-EUR investment. Broker-confirmed entries
+// ('manual') are never touched. Fund entries logged before the broker rule existed
+// (no mode / 'auto') are moved onto it — that is how 投資信託 口数 are actually set.
+function recomputeUnits(){
+  for(const e of entries){
+    if(e.type!=='Investment'||e.currency==='EUR'||!(e.unitPrice>0))continue;
+    if(e.unitRound==='manual'&&e.units>0)continue;
+    const inst=matchTracked(e.label),ut=e.unitType||(inst&&inst.unitType)||'口';
+    if(ut==='口'&&(!e.unitRound||e.unitRound==='auto'))e.unitRound='up';
+    e.units=calcUnits(Math.abs(e.amount),e.unitPrice,e.unitRound||'up',ut);
+  }
+}
+// every purchase of one instrument, newest first
+function instBuys(inst){
+  const kw=(inst.keyword||'').toLowerCase();if(!kw)return [];
+  return entries.filter(e=>e.type==='Investment'&&e.currency!=='EUR'&&(e.label||'').toLowerCase().includes(kw))
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||'')||b.id-a.id);
 }
 // match a logged Investment entry to a tracked instrument by its keyword
 function matchTracked(label){
@@ -2375,39 +2717,72 @@ function manageDefaults(){
 // ═══════════════════════════════════════════════
 // EXPORT / IMPORT
 // ═══════════════════════════════════════════════
-function exportCSV(ft){
+// Save a text file. In the APK a data:/download link does nothing (Android WebView
+// ignores it — that's why Export "did nothing"), so the file is written with the
+// Filesystem plugin and handed to the Android share sheet (save to Files / Drive,
+// send, …). In a browser it's an ordinary download.
+async function saveFile(name,text,mime){
+  const C=window.Capacitor,Pl=C&&C.Plugins;
+  if(C&&C.isNativePlatform&&C.isNativePlatform()&&Pl&&Pl.Filesystem){
+    try{
+      const w=await Pl.Filesystem.writeFile({path:name,data:text,directory:'CACHE',encoding:'utf8'});
+      if(Pl.Share){
+        try{await Pl.Share.share({title:name,dialogTitle:'Save or send '+name,files:[w.uri]});return true;}
+        catch(e){if(/cancel/i.test(String((e&&e.message)||e)))return false;}
+      }
+      await Pl.Filesystem.writeFile({path:name,data:text,directory:'DOCUMENTS',encoding:'utf8'});
+      alert('Saved to Documents/'+name);return true;
+    }catch(err){alert("Couldn't export the file: "+((err&&err.message)||err));return false;}
+  }
+  const url=URL.createObjectURL(new Blob([text],{type:mime}));
+  const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},2000);
+  return true;
+}
+async function exportCSV(ft){
   if(!entries.length){alert("No data.");return;}
   let filt=entries,sfx="Full";
-  if(ft==='year'){const y=document.getElementById('exp-yr').value;filt=entries.filter(e=>e.date?.startsWith(y));sfx=`Year_${y}`;}
-  else if(ft==='month'){const ym=document.getElementById('exp-mo').value;if(!ym)return;filt=entries.filter(e=>e.date?.startsWith(ym));sfx=`Month_${ym}`;}
+  if(ft==='year'){const y=g('exp-yr').value;filt=entries.filter(e=>e.date?.startsWith(y));sfx=`Year_${y}`;}
+  else if(ft==='month'){const ym=g('exp-mo').value;if(!ym)return;filt=entries.filter(e=>e.date?.startsWith(ym));sfx=`Month_${ym}`;}
   if(!filt.length){alert("No records for that period.");return;}
-  let csv="\uFEFFID,Date,Type,Label,Amount,Currency,Rate,JPY Value,CC Card,Bill Date,Billing Cycle\n";
-  [...filt].sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(e=>{
-    const r=e.purchaseRate||eurRate,jpy=e.currency==='EUR'?e.amount*r:e.amount;
+  const q=s=>`"${String(s==null?'':s).replace(/"/g,'""')}"`;
+  let csv="\uFEFFID,Date,Type,Label,Amount,Currency,Rate,JPY Value,Card,Bill Date,Billing Cycle,Units,Unit,Unit Price\n";
+  [...filt].sort((a,b)=>new Date(a.date)-new Date(b.date)||a.id-b.id).forEach(e=>{
+    const r=e.purchaseRate||eurRate,jv=e.currency==='EUR'?e.amount*r:e.amount;
     const bd=getBillDate(e);
-    csv+=`${e.id},${e.date},"${e.type}","${(e.label||'').replace(/"/g,'""')}",${e.amount},${e.currency},${r},${jpy.toFixed(0)},${e.ccType||''},${bd?fmt(bd):''},${e.billingCycle||''}\n`;
+    const inv=e.type==='Investment'&&e.units!=null;
+    const ut=e.unitType||'口';
+    csv+=[e.id,e.date,q(e.type),q(e.label),e.amount,e.currency,e.currency==='EUR'?r:'',jv.toFixed(0),e.ccType||'',bd?fmt(bd):'',q(e.billingCycle||''),
+          inv?toBrokerUnits(e.units,ut):'',inv?ut:'',e.unitPrice||''].join(',')+"\n";
   });
-  const a=document.createElement('a');a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=`Report_${sfx}.csv`;a.click();
+  await saveFile(`MoneyTracker_${sfx}.csv`,csv,'text/csv');
 }
-function dlBackup(){
-  const a=document.createElement('a');
-  a.href="data:text/json;charset=utf-8,"+encodeURIComponent(JSON.stringify({data:entries,recurring:recItems,holdings,defaults:dflts,tracked:trackedInv,snapshots,rate:eurRate,expectedIncome:expInc}));
-  a.download=`Backup_${TODAY.getFullYear()}${String(TODAY.getMonth()+1).padStart(2,'0')}.json`;a.click();
+async function dlBackup(){
+  const data={app:'MoneyTracker',saved:new Date().toISOString(),data:entries,recurring:recItems,holdings,defaults:dflts,presets,
+    tracked:trackedInv,snapshots,forecastVars,paydayOverrides,nisaCap,rate:eurRate,expectedIncome:expInc};
+  await saveFile(`MoneyTracker_Backup_${localISO(new Date())}.json`,JSON.stringify(data,null,1),'application/json');
 }
 function restoreBackup(evt){
-  const r=new FileReader();r.onload=e=>{
+  const r=new FileReader();r.onload=async e=>{
     try{
       const d=JSON.parse(e.target.result);
-      if(d.data)entries=d.data;
-      if(d.recurring){recItems=d.recurring;persist();}
-      if(d.holdings){holdings=d.holdings;persist();}
-      if(d.defaults){dflts=d.defaults;persist();buildTplUI();}
-      if(d.tracked){trackedInv=d.tracked;persist();}
-      if(d.snapshots){snapshots=d.snapshots;persist();}
-      if(d.rate){eurRate=parseFloat(d.rate);persist();document.getElementById('eur-r-inp').value=eurRate;}
-      if(d.expectedIncome){expInc=parseFloat(d.expectedIncome);persist();document.getElementById('exp-inc-inp').value=expInc;}
+      if(!await uiConfirm(`Replace this device's data with the backup${d.saved?' from '+String(d.saved).slice(0,10):''}? (${(d.data||[]).length} transactions.) The cloud is updated on the next save.`,{title:'Restore backup',yes:'Restore'}))return;
+      if(d.data){entries=d.data;normalizeEntries();}
+      if(d.recurring)recItems=d.recurring;
+      if(d.holdings)holdings=d.holdings;
+      if(d.defaults)dflts=d.defaults;
+      if(Array.isArray(d.presets))presets=d.presets;
+      if(d.tracked)trackedInv=d.tracked;
+      if(d.snapshots)snapshots=d.snapshots;
+      if(Array.isArray(d.forecastVars))forecastVars=d.forecastVars;
+      if(d.paydayOverrides&&typeof d.paydayOverrides==='object')paydayOverrides=d.paydayOverrides;
+      if(d.nisaCap)nisaCap=parseInt(d.nisaCap)||nisaCap;
+      if(d.rate){eurRate=parseFloat(d.rate);g('eur-r-inp').value=eurRate;}
+      if(d.expectedIncome){expInc=parseFloat(d.expectedIncome);g('exp-inc-inp').value=expInc;}
+      recomputeUnits();buildTplUI();
       saveRender();closeM('reports-modal');alert("Backup restored!");
     }catch{alert("Could not read backup file.");}
+    finally{evt.target.value='';}
   };
   if(evt.target.files[0])r.readAsText(evt.target.files[0]);
 }
@@ -2436,7 +2811,7 @@ function projectedCardBills(year,month){
       const amt=amtForMonth(item,km);
       const val=item.currency==='EUR'?amt*eurRate:amt;
       const pseudo={label:item.name,amount:-Math.abs(val),currency:'JPY',ccType:card,date:occStr,_projected:true};
-      if(card==='PayPay'){cc27+=Math.abs(val);cc27Ents.push(pseudo);}
+      if(cardDay(card)===27){cc27+=Math.abs(val);cc27Ents.push(pseudo);}
       else{cc10+=Math.abs(val);cc10Ents.push(pseudo);}
     }
   }
@@ -2445,24 +2820,24 @@ function projectedCardBills(year,month){
 
 function computeMonthData(year,month){
   const mS=new Date(year,month,1),mE=new Date(year,month+1,0,23,59,59,999);
-  let income=0,cashExp=0,cc10=0,cc27=0,cc10Ents=[],cc27Ents=[];
+  let income=0,salary=0,cashExp=0,cc10=0,cc27=0,cc10Ents=[],cc27Ents=[];
   let euroBuy=0,stockBuy=0,cardBuy=0;
 
-  for(const e of entries){
+  for(const e of calcEntries()){
     if(!e.date)continue;
     const ed=new Date(e.date+'T00:00:00');
     const rate=e.purchaseRate||eurRate;
     const val=e.currency==='EUR'?e.amount*rate:e.amount;
     const inMonth=ed>=mS&&ed<=mE;
 
-    if(e.type==='Salary/Bonus'||e.type==='Extra Allowance'){
-      if(inMonth)income+=val;
-    } else if(e.type==='Credit Card'||e.type==='Existing Debt Setup'){
+    if(isIncomeT(e.type)){
+      if(inMonth){income+=val;if(e.type==='Salary')salary+=val;}
+    } else if(isCardT(e.type)){
       const bd=getBillDate(e);
       if(bd&&bd>=mS&&bd<=mE){
-        const abs=Math.abs(val);
-        if(e.ccType==='PayPay'){cc27+=abs;cc27Ents.push(e);}
-        else{cc10+=abs;cc10Ents.push(e);}
+        const owed=-val;                                  // + purchase, − refund/credit
+        if(cardDay(e.ccType)===27){cc27+=owed;cc27Ents.push(e);}
+        else{cc10+=owed;cc10Ents.push(e);}
       }
     } else if(e.type!=='Current Cash Setup'&&e.type!=='Investment'){
       if(inMonth)cashExp+=Math.abs(val);
@@ -2486,7 +2861,7 @@ function computeMonthData(year,month){
   const totalExp=cashExp+cc10+cc27;
   const spend={cash:cashExp,euro:euroBuy,stock:stockBuy,card:cardBuy,
                total:cashExp+euroBuy+stockBuy+cardBuy};
-  return{income,cashExp,cc10,cc27,cc10Ents,cc27Ents,totalExp,spend,netFlow:income-totalExp};
+  return{income,salary,cashExp,cc10,cc27,cc10Ents,cc27Ents,totalExp,spend,netFlow:income-totalExp};
 }
 
 // ═══════════════════════════════════════════════
@@ -2535,8 +2910,9 @@ function currentMonthRemaining(){
     else recCash+=val;
   }
   let ccDueLater=0;
-  [...md.cc10Ents,...md.cc27Ents].forEach(e=>{const bd=getBillDate(e);if(bd&&bd>TODAY)ccDueLater+=Math.abs(e.currency==='EUR'?e.amount*(e.purchaseRate||eurRate):e.amount);});
-  const incomeRemain=Math.max(0,Math.max(md.income,expInc)-md.income);
+  [...md.cc10Ents,...md.cc27Ents].forEach(e=>{const bd=getBillDate(e);if(bd&&bd>TODAY)ccDueLater+=-(e.currency==='EUR'?e.amount*(e.purchaseRate||eurRate):e.amount);});
+  // only SALARY counts against the expected salary (bonus / additional income don't)
+  const incomeRemain=Math.max(0,expInc-md.salary);
   return {incomeRemain,recCash,recInv,recCard,ccDueLater};
 }
 // project to the END of (ty,tm). Returns null for past months.
@@ -2581,7 +2957,7 @@ function renderDashboard(){
 
   let w={jpy:0,nisa:0,stk:0,eur:0},eurAcq=0,eurSpnd=0,futInc=0,futExp=0,pendingCC=0;
 
-  for(const e of entries){
+  for(const e of calcEntries()){
     if(!e.date)continue;
     const ed=new Date(e.date+'T00:00:00');
     const rate=e.purchaseRate||eurRate;
@@ -2600,10 +2976,10 @@ function renderDashboard(){
           eurAcq+=Math.abs(e.amount);eurSpnd+=Math.abs(e.amount)*rate;
         } else if(lbl.includes('nisa')){w.nisa+=Math.abs(val);}
         else {w.stk+=Math.abs(val);}
-      } else if(e.type==='Credit Card'||e.type==='Existing Debt Setup'){
+      } else if(isCardT(e.type)){
         const bd=getBillDate(e);
         if(bd&&bd<=todayEOD){if(e.currency==='EUR')w.eur+=e.amount;else w.jpy+=e.amount;}
-        else if(bd&&bd>todayEOD){pendingCC+=Math.abs(val);}
+        else if(bd&&bd>todayEOD){pendingCC-=val;}          // a future credit lowers the debt
       } else {
         if(e.currency==='EUR')w.eur+=e.amount;else w.jpy+=e.amount;
       }
@@ -2729,10 +3105,7 @@ function renderDashboard(){
   }
 
   const cyc=currentPayCycle(isCurM()?TODAY:new Date(vY,vM,15));
-  const cd=computeCycle(cyc.start,cyc.end);
-  const recCyc=cycleRecUnpaid(cyc.start,cyc.end);
-  const leewayBase=Math.max(cd.income,expInc);
-  const leeway=leewayBase-cd.spent-recCyc.cash;
+  const L=cycleLeeway(cyc),cd=L.cd,recCyc=L.rec,leewayBase=L.base,leeway=L.leeway;
   const fmtMD=d=>`${d.getMonth()+1}/${d.getDate()}`;
   g('c-lwy').innerText=jpy(Math.abs(leeway));
   g('c-lwy').className=`cval ${leeway>=0?'green':'red'}`;
@@ -2741,7 +3114,7 @@ function renderDashboard(){
   if(cd.spent>0){
     let bd='<div style="font-size:.64rem;color:var(--muted);margin-top:4px;line-height:1.55;">Spent breakdown:';
     if(cd.cashSub>0)bd+=`<br>• Cash / direct — ${jpy(cd.cashSub)}`;
-    cd.bills.forEach(b=>{bd+=`<br>• ${esc(b.label)} — ${jpy(b.amt)} <span style="opacity:.8;">(${esc(b.cc||'card')} bill, due ${fmtMD(b.due)})</span>`;});
+    cd.bills.forEach(b=>{bd+=`<br>• ${esc(b.label)} — ${b.amt<0?'−':''}${jpy(Math.abs(b.amt))} <span style="opacity:.8;">(${esc(b.cc||'card')} ${b.credit?'credit on the ':''}bill, due ${fmtMD(b.due)})</span>`;});
     g('c-lwy-s').innerHTML+=bd+'</div>';
   }
   g('c-lwy-s').innerHTML+=`<br><span style="font-size:.62rem;color:var(--muted);cursor:pointer;" onclick="adjustPayday()">📅 payday ${fmtMD(cyc.start)} — tap if a holiday shifted it</span>`;
@@ -2778,14 +3151,15 @@ function buildCCBrk(ents){
   if(!ents.length)return'<div class="muted" style="font-size:.7rem;padding-top:3px;">No bills due this month</div>';
   return ents.map(e=>{
     const rate=e.purchaseRate||eurRate,val=e.currency==='EUR'?Math.abs(e.amount)*rate:Math.abs(e.amount);
-    const amtStr=e.currency==='EUR'?`€${Math.abs(e.amount).toLocaleString()} (${jpy(val)})`:jpy(val);
+    const cr=e.type==='Card Credit';
+    const amtStr=(cr?'−':'')+(e.currency==='EUR'?`€${Math.abs(e.amount).toLocaleString()} (${jpy(val)})`:jpy(val));
     const bd=getBillDate(e);
     const iso=d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';
-    const when=e._projected?`🔁 upcoming ${e.date}`:`bought ${e.date}`;
+    const when=e._projected?`🔁 upcoming ${e.date}`:cr?(e._carried?`↩ carried over from the ${e._from} bill · refund logged ${e.date}`:`↩ refund / credit · logged ${e.date}`):`bought ${e.date}`;
     const meta=`${when}${bd?` · due ${iso(bd)}`:''}`;
     const op=e._projected?'opacity:.78;':'';
     return`<div class="cc-row" style="flex-direction:column;align-items:stretch;gap:2px;${op}">`+
-      `<div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:var(--text);${e._projected?'font-style:italic;':''}overflow-wrap:anywhere;min-width:0;">${esc(e.label||'?')}</span><span style="flex-shrink:0;color:var(--red);">${amtStr}</span></div>`+
+      `<div style="display:flex;justify-content:space-between;gap:8px;"><span style="color:var(--text);${e._projected?'font-style:italic;':''}overflow-wrap:anywhere;min-width:0;">${esc(e.label||'?')}</span><span style="flex-shrink:0;color:${cr?'var(--green)':'var(--red)'};">${amtStr}</span></div>`+
       `<div class="muted" style="font-size:.64rem;overflow-wrap:anywhere;">${meta}</div>`+
     `</div>`;
   }).join('');
@@ -2878,7 +3252,7 @@ function drawSankey() {
 
   let flowInc = 0, flowExp = {}, flowCC = 0;
 
-  for (const e of entries) {
+  for (const e of calcEntries()) {
     if (!e.date || e.type === 'Current Cash Setup') continue;
     const ed   = new Date(e.date + 'T00:00:00');
     const rate = e.purchaseRate || eurRate;
@@ -2888,7 +3262,7 @@ function drawSankey() {
     if (mode === 'all') {
       inc = e.type !== 'Existing Debt Setup';
     } else if (mode === 'month') {
-      if (e.type === 'Credit Card' || e.type === 'Existing Debt Setup') {
+      if (isCardT(e.type)) {
         const bd = getBillDate(e); inc = !!bd && bd >= mS && bd <= mE;
       } else { inc = ed >= mS && ed <= mE; }
     } else if (mode === 'purchase') {
@@ -2896,14 +3270,19 @@ function drawSankey() {
     } else if (mode === 'debt-10') {
       const cS = new Date(now.getFullYear(), now.getMonth()-1, 16);
       const cE = new Date(now.getFullYear(), now.getMonth(),   15, 23, 59, 59);
-      if (ed >= cS && ed <= cE) inc = (e.type === 'Credit Card') ? e.ccType !== 'PayPay' : true;
+      if (ed >= cS && ed <= cE) inc = (e.type === 'Credit Card' || e.type === 'Card Credit') ? cardDay(e.ccType) === 10 : true;
     } else if (mode === 'debt-27') {
       const cS = new Date(now.getFullYear(), now.getMonth(),   1);
       const cE = new Date(now.getFullYear(), now.getMonth()+1, 0, 23, 59, 59);
-      if (ed >= cS && ed <= cE) inc = (e.type === 'Credit Card') ? e.ccType === 'PayPay' : true;
+      if (ed >= cS && ed <= cE) inc = (e.type === 'Credit Card' || e.type === 'Card Credit') ? cardDay(e.ccType) === 27 : true;
     }
     if (!inc) continue;
 
+    if (e.type === 'Card Credit') {           // a refund shrinks its card's band, it isn't income
+      const cat = `CC: ${e.ccType || 'Card'}`;
+      flowExp[cat] = (flowExp[cat] || 0) - val; flowCC -= val;
+      continue;
+    }
     if (val > 0) {
       flowInc += val;
     } else {
@@ -2913,7 +3292,7 @@ function drawSankey() {
     }
   }
 
-  const totalExp = Object.values(flowExp).reduce((a, b) => a + b, 0);
+  const totalExp = Object.values(flowExp).reduce((a, b) => a + Math.max(0, b), 0);
   const net = flowInc - totalExp;
 
   g('sk-net').innerText   = jpy(net);
@@ -3004,6 +3383,7 @@ function renderHist(){
   if(srch)list=list.filter(e=>(e.label||'').toLowerCase().includes(srch));
   if(mOnly){const mS=new Date(vY,vM,1),mE=new Date(vY,vM+1,0,23,59,59);list=list.filter(e=>{const d=new Date(e.date+'T00:00:00');return d>=mS&&d<=mE;});}
   const hl=g('h-list');hl.innerHTML='';
+  const _slices=entries.some(e=>e.type==='Card Credit')?creditSlices():null;
   list.slice(0,histLim).forEach(e=>{
     const isFut=new Date(e.date+'T00:00:00')>todayEOD;
     const rate=e.purchaseRate||eurRate,val=e.currency==='EUR'?e.amount*rate:e.amount;
@@ -3015,11 +3395,25 @@ function renderHist(){
     const bd=getBillDate(e);
     const badges=[];
     if(isFut)badges.push(`<span class="bdg b-pu">UPCOMING</span>`);
-    if(bd&&bd>todayEOD)badges.push(`<span class="bdg b-or">Due ${fmt(bd)}</span>`);
-    if(e.ccType)badges.push(`<span class="bdg b-bl">${e.ccType}</span>`);
+    if(e.type==='Card Credit'&&bd){
+      const sl=(_slices&&_slices[e.id])||[];
+      badges.push(`<span class="bdg b-gr">↩ ${esc(e.ccType)} ${sl.length>1?sl.map(s=>`${s.iso.slice(5).replace('-','/')} ${jpy(s.amt)}`).join(' → '):'bill '+fmt(bd)}</span>`);
+    }
+    else{
+      if(bd&&bd>todayEOD)badges.push(`<span class="bdg b-or">Due ${fmt(bd)}</span>`);
+      if(e.ccType)badges.push(`<span class="bdg b-bl">${esc(e.ccType)}</span>`);
+    }
+    let extra='';
+    if(e.type==='Investment'&&e.currency!=='EUR'){
+      const inst=matchTracked(e.label),ut=e.unitType||(inst&&inst.unitType)||'口';
+      extra=(e.unitPrice&&e.units!=null)
+        ?`<div class="hi-x">→ <b>${fmtUnits(e.units,ut)}</b> @ ¥${Number(e.unitPrice).toLocaleString()}${ut==='株'?'/share':' /10,000口'}${e.unitRound==='manual'?' · confirmed':''}</div>`
+        :`<div class="hi-x" style="color:var(--orange);">No price captured — edit to add the price or units</div>`;
+    }
     li.innerHTML=`<div class="hi-l">
-      <div class="hi-t">${e.label||'—'}</div>
-      <div class="hi-m"><span>${e.date}</span><span class="muted">${e.type}</span>${badges.join('')}</div>
+      <div class="hi-t">${esc(e.label||'—')}</div>
+      <div class="hi-m"><span>${e.date}</span><span class="muted">${esc(e.type==='Card Credit'?'Card refund':e.type)}</span>${badges.join('')}</div>
+      ${extra}
     </div>
     <div class="hi-r">
       <div class="hi-a ${val>0?'green':'red'}">${val>0?'+':'−'}${dAmt}</div>
