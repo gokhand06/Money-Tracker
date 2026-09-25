@@ -607,6 +607,9 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
 .inv-prev{ margin-top:10px; padding:9px 11px; border-radius:8px; background:rgba(0,0,0,.2); font-size:.8rem; line-height:1.55; }
 .inv-prev:empty{ display:none; }
 .hi-x{ font-size:.7rem; color:var(--muted); margin-top:4px; }
+.inv-chk{ display:flex; gap:8px; align-items:flex-start; margin-top:10px; font-size:.76rem; color:var(--muted); cursor:pointer; line-height:1.45; }
+.inv-chk input{ width:auto; margin-top:2px; flex:none; }
+.inv-chk b{ color:var(--text); }
 </style>
 </head>
 <body>
@@ -728,6 +731,8 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
       <span id="inv-units-sfx" class="inv-sfx">口</span>
       <button type="button" class="bsm bg" id="inv-units-auto" onclick="_invUnitsManual=false;invPreview()" style="flex:none;display:none;">Auto</button>
     </div>
+    <label class="inv-chk"><input type="checkbox" id="inv-payroll" onchange="invPreview()">
+      <span><b>Already deducted from my salary</b> — counts as invested, but isn't taken from cash (e.g. 持株会)</span></label>
     <div class="inv-prev" id="inv-prev"></div>
   </div>
 
@@ -1223,6 +1228,11 @@ function isIncomeT(t){return t==='Salary'||t==='Bonus'||t==='Additional Income';
 // Rows that settle on a card's bill date: purchases and starting debt (negative)
 // and refunds / credits (type 'Card Credit', positive) which reduce a chosen bill.
 function isCardT(t){return t==='Credit Card'||t==='Existing Debt Setup'||t==='Card Credit';}
+// Investments paid by PAYROLL DEDUCTION (e.g. Mebuki 持株会): the money never reaches
+// the bank — the salary you log is already net of it — so they add to the
+// investment and net worth but never reduce cash. Stored in the existing
+// billingCycle column, so the cloud script needs no change.
+function isPayroll(e){return !!e&&e.type==='Investment'&&e.billingCycle==='Payroll deduction';}
 function migrateType(e){
   if(e.type==='Salary/Bonus')e.type=/bonus|賞与|ボーナス/i.test(e.label||'')?'Bonus':'Salary';
   else if(e.type==='Extra Allowance')e.type='Additional Income';
@@ -1311,7 +1321,7 @@ function showInvBox(){
   g('inv-box').style.display=show?'block':'none';
   if(show)invPreview();
 }
-function resetInvForm(){_invUnitsManual=false;_invPxAuto=true;_invInstId=null;_invFetchedFor={};g('inv-price').value='';g('inv-units').value='';g('inv-prev').innerHTML='';}
+function resetInvForm(){{const c=g('inv-payroll');if(c)c.checked=false;}_invUnitsManual=false;_invPxAuto=true;_invInstId=null;_invFetchedFor={};g('inv-price').value='';g('inv-units').value='';g('inv-prev').innerHTML='';}
 // ── Investment form: live "what will this buy" preview ──
 // Shows the price that will be used and the units you'll receive BEFORE saving.
 // The price defaults to the instrument's last known price (refreshed in the
@@ -1328,6 +1338,8 @@ function invPreview(){
       let m='up';
       if(ut==='株'){const last=entries.filter(e=>e.type==='Investment'&&matchTracked(e.label)===inst&&['up','down','auto','none'].includes(e.unitRound)).sort((a,b)=>b.id-a.id)[0];m=last?last.unitRound:'down';}
       g('inv-round').value=m;
+      const lastAny=entries.filter(e=>e.type==='Investment'&&matchTracked(e.label)===inst).sort((a,b)=>b.id-a.id)[0];
+      g('inv-payroll').checked=!!(lastAny&&isPayroll(lastAny));
     }
   }
   const upd=inst&&inst.updated,fresh=upd===localISO(TODAY);
@@ -1348,7 +1360,7 @@ function invPreview(){
   const val=u*px,diff=val-amt;
   const note=_invUnitsManual?'Units typed by hand (broker-confirmed) — saved exactly as entered.'
     :(Math.abs(diff)<0.05?'Exact — no rounding needed.':`${mode==='up'?'Broker rule':'Rounding'}: worth ${diff>0?'+':'−'}¥${Math.abs(diff).toLocaleString(undefined,{maximumFractionDigits:1})} vs. the ¥${amt.toLocaleString()} paid.`);
-  pv.innerHTML=`You get <b>${fmtUnits(u,ut)}</b> — worth <b>¥${val.toLocaleString(undefined,{maximumFractionDigits:1})}</b> at ¥${px.toLocaleString()}${ut==='株'?' / share':' per 10,000口'}<div class="muted" style="font-size:.68rem;margin-top:2px;">${note}</div>`;
+  pv.innerHTML=`You get <b>${fmtUnits(u,ut)}</b> — worth <b>¥${val.toLocaleString(undefined,{maximumFractionDigits:1})}</b> at ¥${px.toLocaleString()}${ut==='株'?' / share':' per 10,000口'}<div class="muted" style="font-size:.68rem;margin-top:2px;">${note}</div>`+(g('inv-payroll').checked?`<div class="muted" style="font-size:.68rem;margin-top:2px;">Paid from your salary — your cash balance is not reduced.</div>`:'');
 }
 async function invFetchPrice(silent){
   const inst=matchTracked(g('label').value);
@@ -1578,6 +1590,7 @@ async function addEntry(){
     const utype=(inst&&inst.unitType)||'口';   // 口 for 投資信託, 株 for stocks
     const rmode=g('inv-round').value;
     entry.unitType=utype;entry.unitRound=rmode;
+    if(g('inv-payroll').checked)entry.billingCycle='Payroll deduction';
     let px=parseFloat(g('inv-price').value);
     if(!(px>0)&&inst&&inst.ticker){
       const sb=g('sub-btn');const old=sb.innerText;sb.innerText='Pricing…';sb.disabled=true;
@@ -1593,8 +1606,16 @@ async function addEntry(){
     }
   }
 
+  const prevE=editId?entries.find(e=>e.id===editId):null;
   if(editId){entries[entries.findIndex(e=>e.id===editId)]=entry;cancelEdit();}
   else entries.push(entry);
+  // flipped "deducted from salary" on one purchase → offer the same for that instrument's others
+  if(entry.type==='Investment'&&prevE&&isPayroll(prevE)!==isPayroll(entry)){
+    const inst=matchTracked(entry.label),on=isPayroll(entry);
+    const others=inst?entries.filter(e=>e!==entry&&e.type==='Investment'&&matchTracked(e.label)===inst&&isPayroll(e)!==on):[];
+    if(others.length&&await uiConfirm(`Mark the other ${others.length} ${inst.name} purchase${others.length>1?'s':''} as ${on?'already deducted from your salary':'paid from cash'} too?`,{title:'Apply to all',yes:'Yes, all of them',danger:false}))
+      others.forEach(e=>{e.billingCycle=on?'Payroll deduction':'Immediate/Cash';});
+  }
   resetInvForm();
   g('eur-total').value='';
   closeSB();   // dismiss the sheet + scrim after a save (Bug A)
@@ -1621,6 +1642,7 @@ function triggerEdit(id){
     g('inv-round').value=['up','down','auto','none'].includes(e.unitRound)?e.unitRound:'up';
     _invUnitsManual=e.unitRound==='manual'&&e.units>0;
     g('inv-units').value=e.units!=null?toBrokerUnits(e.units,ut):'';
+    g('inv-payroll').checked=isPayroll(e);
   }
   handleTypeChange();
   if(e.type==='Card Credit'){fillBillOptions(e.billDate);updateCCPre();}
@@ -2821,7 +2843,7 @@ function projectedCardBills(year,month){
 function computeMonthData(year,month){
   const mS=new Date(year,month,1),mE=new Date(year,month+1,0,23,59,59,999);
   let income=0,salary=0,cashExp=0,cc10=0,cc27=0,cc10Ents=[],cc27Ents=[];
-  let euroBuy=0,stockBuy=0,cardBuy=0;
+  let euroBuy=0,stockBuy=0,cardBuy=0,payrollInv=0;
 
   for(const e of calcEntries()){
     if(!e.date)continue;
@@ -2847,6 +2869,7 @@ function computeMonthData(year,month){
     if(inMonth){
       if(e.type==='Investment'){
         if(e.currency==='EUR')euroBuy+=Math.abs(val);   // yen spent acquiring euros
+        else if(isPayroll(e))payrollInv+=Math.abs(val);  // invested straight from salary — not money spent
         else stockBuy+=Math.abs(val);                    // yen invested in stocks/NISA
       } else if(e.type==='Credit Card'){
         cardBuy+=Math.abs(val);                           // card purchases (billed later)
@@ -2859,7 +2882,7 @@ function computeMonthData(year,month){
   cc10Ents=cc10Ents.concat(proj.cc10Ents);cc27Ents=cc27Ents.concat(proj.cc27Ents);
 
   const totalExp=cashExp+cc10+cc27;
-  const spend={cash:cashExp,euro:euroBuy,stock:stockBuy,card:cardBuy,
+  const spend={cash:cashExp,euro:euroBuy,stock:stockBuy,card:cardBuy,payroll:payrollInv,
                total:cashExp+euroBuy+stockBuy+cardBuy};
   return{income,salary,cashExp,cc10,cc27,cc10Ents,cc27Ents,totalExp,spend,netFlow:income-totalExp};
 }
@@ -2970,7 +2993,7 @@ function renderDashboard(){
         if(e.currency==='EUR')w.eur+=Math.abs(e.amount);else w.jpy+=e.amount;
       } else if(e.type==='Investment'){
         const lbl=(e.label||'').toLowerCase();
-        w.jpy+=val;                                  // EVERY investment is paid out of cash (val is negative)
+        if(!isPayroll(e))w.jpy+=val;                 // paid out of cash (val is negative) — unless it came straight out of salary
         if(e.currency==='EUR'){
           w.eur+=Math.abs(e.amount);                 // …and the euros land in the euro bucket
           eurAcq+=Math.abs(e.amount);eurSpnd+=Math.abs(e.amount)*rate;
@@ -3003,6 +3026,7 @@ function renderDashboard(){
   if(sp.card)brk.push(`Card: ${jpy(sp.card)}`);
   if(sp.euro)brk.push(`Euro: ${jpy(sp.euro)}`);
   if(sp.stock)brk.push(`Stocks/NISA: ${jpy(sp.stock)}`);
+  if(sp.payroll)brk.push(`Invested from salary: ${jpy(sp.payroll)} (not from cash)`);
   g('s-exp-brk').innerHTML=brk.join('<br>');
   g('s-prf').innerText=jpy(profit);
   g('s-prf').className=`si-v ${profit>=0?'green':'red'}`;
@@ -3253,7 +3277,7 @@ function drawSankey() {
   let flowInc = 0, flowExp = {}, flowCC = 0;
 
   for (const e of calcEntries()) {
-    if (!e.date || e.type === 'Current Cash Setup') continue;
+    if (!e.date || e.type === 'Current Cash Setup' || isPayroll(e)) continue;   // salary-deducted buys never touched cash
     const ed   = new Date(e.date + 'T00:00:00');
     const rate = e.purchaseRate || eurRate;
     const val  = e.currency === 'EUR' ? e.amount * rate : e.amount;
@@ -3395,6 +3419,7 @@ function renderHist(){
     const bd=getBillDate(e);
     const badges=[];
     if(isFut)badges.push(`<span class="bdg b-pu">UPCOMING</span>`);
+    if(isPayroll(e))badges.push(`<span class="bdg b-gr">from salary</span>`);
     if(e.type==='Card Credit'&&bd){
       const sl=(_slices&&_slices[e.id])||[];
       badges.push(`<span class="bdg b-gr">↩ ${esc(e.ccType)} ${sl.length>1?sl.map(s=>`${s.iso.slice(5).replace('-','/')} ${jpy(s.amt)}`).join(' → '):'bill '+fmt(bd)}</span>`);
