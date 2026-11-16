@@ -647,7 +647,10 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
 
 <div class="sb" id="sidebar">
   <div class="clock" id="live-clock">00:00:00 2026.01.01</div>
-  <h2 id="form-title">Transaction Input</h2>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+    <h2 id="form-title">Transaction Input</h2>
+    <button type="button" class="bsm bg" onclick="clearForm()">Clear</button>
+  </div>
 
   <div class="fg">
     <label>Type / Category</label>
@@ -672,7 +675,7 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
     <label>Credit Card</label>
     <select id="cc-type" onchange="onCardChange()">
       <option value="PayPay">PayPay (27th Payment)</option>
-      <option value="Amazon">Amazon Card (27th Payment)</option>
+      <option value="Amazon">Amazon Card (26th Payment)</option>
       <option value="Joyo">Joyo Card (10th Payment)</option>
     </select>
     <div id="cc-bill-wrap" style="display:none;margin-top:8px;">
@@ -800,7 +803,7 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
     </div>
     <div class="si"><div class="si-l">Net Profit</div><div class="si-v" id="s-prf">¥0</div></div>
     <div class="si"><div class="si-l">CC 10th Bills</div><div class="si-v orange" id="s-cc10">¥0</div></div>
-    <div class="si"><div class="si-l">CC 27th Bills</div><div class="si-v orange" id="s-cc27">¥0</div></div>
+    <div class="si"><div class="si-l">CC 26–27th Bills</div><div class="si-v orange" id="s-cc27">¥0</div></div>
   </div>
   <div id="mom-cmp" style="font-size:.72rem;color:var(--muted);margin:-6px 0 14px;padding:0 4px;"></div>
 
@@ -816,7 +819,7 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
       <div class="cc-brk" id="cc10-brk"></div>
     </div>
     <div class="card">
-      <div class="clbl">27th Bill Debt — PayPay / Amazon</div>
+      <div class="clbl">Month-end cards — Amazon 26th · PayPay 27th</div>
       <div class="cval red" id="c-cc27">¥0</div>
       <div class="cc-brk" id="cc27-brk"></div>
     </div>
@@ -904,7 +907,7 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
         <option value="month">📅 Monthly Cash Flow (billing-date view)</option>
         <option value="purchase">🛒 Monthly by Purchase Date</option>
         <option value="debt-10">💳 Pending 10th Cycle — Joyo</option>
-        <option value="debt-27">💳 Pending 27th Cycle — PayPay</option>
+        <option value="debt-27">💳 Pending 26th / 27th Cycle — Amazon / PayPay</option>
         <option value="all">📊 12-Month Trend (income vs spending)</option>
       </select>
       <div class="sk-m">
@@ -967,6 +970,14 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
     <div class="hr"></div>
     <button class="bgrn" onclick="pushAll()" style="width:100%;padding:10px;">⬆️ Push EVERYTHING to Cloud now</button>
     <div class="hr"></div>
+    <h3 style="margin-bottom:6px;">↩ Undo last cloud update</h3>
+    <p class="muted" id="undo-info" style="font-size:.72rem;line-height:1.5;margin-bottom:6px;"></p>
+    <button class="bg" onclick="undoLastSync()" style="width:100%;padding:8px;">Bring back the data from before it</button>
+    <div class="hr"></div>
+    <h3 style="margin-bottom:6px;">🎌 Japanese holidays</h3>
+    <p class="muted" id="hol-info" style="font-size:.72rem;line-height:1.5;margin-bottom:6px;"></p>
+    <button class="bg" onclick="refreshHolidays(true)" style="width:100%;padding:8px;">Refresh the holiday list</button>
+    <div class="hr"></div>
     <h3 style="margin-bottom:6px;">↩ Restore from a backup</h3>
     <p style="font-size:.72rem;color:var(--muted);margin-bottom:6px;">The cloud auto-saves a dated copy of your ledger (last 7 kept). Pick one to roll your transactions back to that day.</p>
     <div class="exp-row" style="gap:8px;">
@@ -986,7 +997,7 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
     <h2>📊 Reports & Backup</h2>
     <h3>📈 Net Worth Trend</h3>
     <div id="nw-chart" style="margin-bottom:8px;"></div>
-    <div class="exp-row"><button onclick="takeSnapshotNow()" style="background:var(--accent);">📸 Snapshot net worth now</button></div>
+    <div class="muted" style="font-size:.7rem;line-height:1.5;margin-bottom:6px;">Rebuilt from your ledger every time: each past month as it stood on its last day (investments at what you paid), this month with today's market prices.</div>
     <div class="hr"></div>
     <h3>🧾 Spending by Category <span class="muted" style="font-size:.72rem;" id="cat-mo-lbl"></span></h3>
     <div id="cat-bars" style="margin-bottom:6px;"></div>
@@ -1041,7 +1052,7 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
       <select id="re-pay">
         <option value="Cash">💴 Cash / Bank (immediate)</option>
         <option value="PayPay">💳 PayPay Card (27th bill)</option>
-        <option value="Amazon">💳 Amazon Card (27th bill)</option>
+        <option value="Amazon">💳 Amazon Card (26th bill)</option>
         <option value="Joyo">💳 Joyo Card (10th bill)</option>
       </select>
       <div style="font-size:.69rem;color:var(--muted);margin-top:2px;">Card-paid items (e.g. Spotify, Nikkei News) flow into that card's billing cycle instead of immediate cash.</div>
@@ -1160,7 +1171,8 @@ let cloudToken = localStorage.getItem('financeTrackerToken') || '';
 // ═══════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', renderDashboard);
 document.addEventListener('DOMContentLoaded', ()=>{const s=document.getElementById('inv-round');const sv=localStorage.getItem('financeTrackerUnitRound');if(s&&sv)s.value=sv;});
-window.addEventListener('resize', () => { clearTimeout(window._rt); window._rt = setTimeout(renderDashboard, 250); });
+let _rw=window.innerWidth;   // re-render on width changes only (not when a phone keyboard opens)
+window.addEventListener('resize', () => { if(window.innerWidth===_rw)return; _rw=window.innerWidth; clearTimeout(window._rt); window._rt = setTimeout(renderDashboard, 250); });
 
 // ═══════════════════════════════════════════════
 // DATA
@@ -1187,6 +1199,19 @@ let presets = JSON.parse(localStorage.getItem('financeTrackerPresets')||'null');
 function renderPresetChips(){}   // chips are app-only
 // the website has no styled dialog — use the browser's confirm()
 function uiConfirm(msg){return Promise.resolve(confirm(msg));}
+function uiAlert(msg){alert(msg);return Promise.resolve(true);}
+// several options → a numbered browser prompt (null = cancelled / decide later)
+function uiChoice(msg,opts){
+  const ch=(opts&&opts.choices)||[{label:'OK',value:true}];
+  if(ch.length===1){alert(msg);return Promise.resolve(ch[0].value);}
+  const real=ch.filter(c=>c.value!==null);
+  const a=prompt(((opts&&opts.title)?opts.title+'\n\n':'')+msg+'\n\n'+real.map((c,i)=>`${i+1} = ${c.label}`).join('\n')+'\n\nType a number, or Cancel to decide later:','');
+  const i=parseInt(a,10);
+  return Promise.resolve(i>=1&&i<=real.length?real[i-1].value:null);
+}
+function toast(msg){setSyncStatus(_lastSync,msg);}          // shown in the status pill
+function setSyncBusy(on){const b=document.getElementById('sync-btn');if(b)b.innerText=on?'⏳…':'☁️ Sync';}
+function finishLoader(){hideLoader();}
 // Auto-tracked investments (yen-denominated Tokyo proxies so there's no FX math).
 // "keyword" = text that appears in the Label of your logged Investment entries.
 let trackedInv = JSON.parse(localStorage.getItem('financeTrackerTracked')) || [
@@ -1250,6 +1275,11 @@ let vY = TODAY.getFullYear(), vM = TODAY.getMonth();
 let editId=null, editRecId=null, editHoldId=null;
 let _invUnitsManual=false, _invPxAuto=true, _invInstId=null, _invFetchedFor={};
 let _lastSync='idle';   // last cloud status (read by the auto-retry listeners)
+// false until the start-up cloud check has finished (or been skipped / timed out).
+// Automatic local writes — auto-settling recurring items, the monthly snapshot — wait
+// for it, so they can never race ahead of newer data that is about to be pulled.
+let _bootReady=false;
+let _dirtySeq=0;        // bumps on every local change (see SYNC SAFETY)
 let histLim=30;
 
 // ═══════════════════════════════════════════════
@@ -1403,27 +1433,97 @@ function calcEur(){
 // ═══════════════════════════════════════════════
 // CC BILLING DATE
 // ═══════════════════════════════════════════════
-// ── Japanese bank holidays ──
-// Official national holidays (内閣府) + the banks' year-end closure (12/31–1/3).
-// Card debits and business-day shifts skip these exactly like weekends. Extend the
-// list once a year (the Cabinet Office publishes the next year's dates each
-// February); dates past the list fall back to weekend-only handling.
-// Kept inside a function (not a top-level const) so boot-time callers can't hit a TDZ.
+// ── Japanese public holidays ──
+// Source of truth: the Cabinet Office's official list (内閣府「国民の祝日」CSV), downloaded
+// to this device, kept in localStorage and refreshed about once a month or from
+// Settings → Holidays. The phone app reads the CSV directly; a browser can't (the
+// site sends no CORS header), so the website uses holidays-jp — a public mirror
+// generated from that same file. The list below is only the offline fallback
+// (official through 2027; 2028 computed) for years the download doesn't cover.
+// Card debits and business-day shifts skip holidays exactly like weekends.
 function jpHolidays(){
-  if(!jpHolidays._s)jpHolidays._s=new Set([
-    '2026-01-01','2026-01-02','2026-01-03','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29',
-    '2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22',
-    '2026-09-23','2026-10-12','2026-11-03','2026-11-23','2026-12-31',
-    '2027-01-01','2027-01-02','2027-01-03','2027-01-11','2027-02-11','2027-02-23','2027-03-21','2027-03-22',
-    '2027-04-29','2027-05-03','2027-05-04','2027-05-05','2027-07-19','2027-08-11','2027-09-20','2027-09-23',
-    '2027-10-11','2027-11-03','2027-11-23','2027-12-31',
-    '2028-01-01','2028-01-02','2028-01-03','2028-01-10','2028-02-11','2028-02-23','2028-03-20','2028-04-29',
-    '2028-05-03','2028-05-04','2028-05-05','2028-07-17','2028-08-11','2028-09-18','2028-09-22','2028-10-09',
-    '2028-11-03','2028-11-23','2028-12-31'
-  ]);
+  if(!jpHolidays._s){
+    const s=new Set([
+      '2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04',
+      '2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12',
+      '2026-11-03','2026-11-23',
+      '2027-01-01','2027-01-11','2027-02-11','2027-02-23','2027-03-21','2027-03-22','2027-04-29','2027-05-03',
+      '2027-05-04','2027-05-05','2027-07-19','2027-08-11','2027-09-20','2027-09-23','2027-10-11','2027-11-03',
+      '2027-11-23',
+      '2028-01-01','2028-01-10','2028-02-11','2028-02-23','2028-03-20','2028-04-29','2028-05-03','2028-05-04',
+      '2028-05-05','2028-07-17','2028-08-11','2028-09-18','2028-09-22','2028-10-09','2028-11-03','2028-11-23'
+    ]);
+    const c=holidayCache();
+    if(c){
+      // the official download wins for every year it covers; the fallback only fills later years
+      const ys=c.dates.map(d=>+d.slice(0,4)),lo=Math.min(...ys),hi=Math.max(...ys);
+      for(const d of [...s]){const y=+d.slice(0,4);if(y>=lo&&y<=hi)s.delete(d);}
+      c.dates.forEach(d=>s.add(d));
+    }
+    jpHolidays._s=s;
+  }
   return jpHolidays._s;
 }
-function isBizDay(d){const w=d.getDay();return w!==0&&w!==6&&!jpHolidays().has(localISO(d));}
+function holidayCache(){
+  try{const c=JSON.parse(localStorage.getItem('financeTrackerHolidays')||'null');
+    return (c&&Array.isArray(c.dates)&&c.dates.length>=10)?c:null;}catch(_){return null;}
+}
+// "2026/1/12,成人の日" lines → ['2026-01-12', …]. Only the date part is read, so the
+// file's Shift-JIS names never matter.
+function parseHolidayCsv(t){
+  const out=[],re=/(?:^|\n)\s*(\d{4})\/(\d{1,2})\/(\d{1,2})\s*,/g;let m;
+  while((m=re.exec(t)))out.push(m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0'));
+  return out;
+}
+async function refreshHolidays(manual){
+  let dates=null,source='';
+  try{
+    if(nativeHttp()){
+      dates=parseHolidayCsv(await nativeGet('https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv',15000));
+      source='Cabinet Office (内閣府)';
+    }
+  }catch(_){dates=null;}
+  if(!dates||dates.length<10){
+    try{
+      const j=await fetchJSON('https://holidays-jp.github.io/api/v1/date.json',{},15000);
+      dates=Object.keys(j||{}).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k));
+      source='holidays-jp (mirror of the Cabinet Office list)';
+    }catch(_){dates=null;}
+  }
+  try{localStorage.setItem('financeTrackerHolTry',localISO(new Date()));}catch(_){}
+  const yr=new Date().getFullYear();
+  // sanity: a real list always contains this year's New Year's Day
+  if(!dates||dates.length<10||!dates.includes(yr+'-01-01')){
+    if(manual)uiAlert("Couldn't download the holiday list right now. The dates already on this device stay in use.",'Holidays');
+    renderHolidayInfo();return false;
+  }
+  dates=[...new Set(dates.filter(d=>+d.slice(0,4)>=yr-1))].sort();
+  try{localStorage.setItem('financeTrackerHolidays',JSON.stringify({fetched:localISO(new Date()),source,dates}));}catch(_){}
+  jpHolidays._s=null;
+  renderHolidayInfo();renderDashboard();
+  return true;
+}
+// about once a month (and at most one attempt a day when offline)
+function maybeRefreshHolidays(){
+  const c=holidayCache(),today=localISO(new Date());
+  let tried='';try{tried=localStorage.getItem('financeTrackerHolTry')||'';}catch(_){}
+  const age=c&&c.fetched?(new Date(today)-new Date(c.fetched))/86400000:Infinity;
+  if(age>30&&tried!==today)refreshHolidays(false);
+}
+function renderHolidayInfo(){
+  const el=g('hol-info');if(!el)return;
+  const c=holidayCache(),all=[...jpHolidays()].sort(),last=all[all.length-1]||'';
+  el.innerHTML=c
+    ?`Official list on this device: <b>${c.dates.length} dates</b>, through <b>${c.dates[c.dates.length-1]}</b>.<br>Downloaded ${c.fetched} from ${esc(c.source)}.`
+    :`Using the built-in list (through ${last}). Tap Refresh to download the official one.`;
+}
+// banks are closed 12/31–1/3 every year (not public holidays, so not in the list)
+function isBizDay(d){
+  const w=d.getDay();if(w===0||w===6)return false;
+  const m=d.getMonth(),dd=d.getDate();
+  if((m===11&&dd===31)||(m===0&&dd<=3))return false;
+  return !jpHolidays().has(localISO(d));
+}
 // the first business day on/after y-m-d (card bill dates)
 function adjDate(y,m,d){
   const dt=new Date(y,m,d);
@@ -1432,12 +1532,14 @@ function adjDate(y,m,d){
 }
 function fmt(d){return`${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;}
 
-// Bill-day group per card. PayPay and Amazon bill the whole calendar month on
-// the 27th of the next month; Joyo cuts off on the 15th and bills the 10th.
-function cardDay(cc){return (cc==='PayPay'||cc==='Amazon')?27:10;}
+// Bill day per card. PayPay (27th) and Amazon (26th — 三井住友カード, confirmed against the
+// bank statement) bill the whole calendar month in the following month; Joyo cuts
+// off on the 15th and bills the 10th.
+function cardDay(cc){return cc==='PayPay'?27:cc==='Amazon'?26:10;}
+function isMonthEndCard(cc){return cardDay(cc)!==10;}
 function billDateFor(dateStr,cc){
   const d=new Date(dateStr+'T00:00:00');if(isNaN(d))return null;
-  if(cardDay(cc)===27)return adjDate(d.getFullYear(),d.getMonth()+1,27);
+  if(isMonthEndCard(cc))return adjDate(d.getFullYear(),d.getMonth()+1,cardDay(cc));
   return adjDate(d.getFullYear(),d.getDate()<=15?d.getMonth()+1:d.getMonth()+2,10);
 }
 function getBillDate(e){
@@ -1456,13 +1558,13 @@ function getBillDate(e){
 // the ledger keeps the single refund entry.
 function nominalBill(cc,iso){            // [year, month] of the bill's nominal 27th / 10th
   const d=new Date(iso+'T00:00:00');let y=d.getFullYear(),m=d.getMonth();
-  if(cardDay(cc)===27&&d.getDate()<15){m--;if(m<0){m=11;y--;}}
+  if(isMonthEndCard(cc)&&d.getDate()<15){m--;if(m<0){m=11;y--;}}
   return [y,m];
 }
 function nextBillISO(cc,iso){const [y,m]=nominalBill(cc,iso);return localISO(adjDate(y,m+1,cardDay(cc)));}
 function billPeriodClosed(cc,iso){
   const [y,m]=nominalBill(cc,iso);
-  const end=cardDay(cc)===27?new Date(y,m,0,23,59,59,999):new Date(y,m-1,15,23,59,59,999);
+  const end=isMonthEndCard(cc)?new Date(y,m,0,23,59,59,999):new Date(y,m-1,15,23,59,59,999);
   return end<new Date(TODAY.getFullYear(),TODAY.getMonth(),TODAY.getDate());
 }
 // {creditId: [{iso, amt}, …]} — how each credit is spread over bills
@@ -1541,7 +1643,7 @@ function updateCCPre(){
     return;
   }
   const pd=billDateFor(g('date').value,card);if(!pd)return;
-  pre.innerText=`Bills ${fmt(pd)} — `+(cardDay(card)===27?'the whole month is billed together.':'purchases up to the 15th.');
+  pre.innerText=`Bills ${fmt(pd)} — `+(isMonthEndCard(card)?'the whole month is billed together.':'purchases up to the 15th.');
 }
 document.getElementById('date').addEventListener('change',updateCCPre);
 
@@ -1552,14 +1654,33 @@ function calcBillCycle(dateStr,ccType,billISO){
   const bd=billISO?new Date(billISO+'T00:00:00'):billDateFor(dateStr,ccType);
   if(!bd||isNaN(bd))return'Immediate/Cash';
   let m=bd.getMonth();
-  if(cardDay(ccType)===27&&bd.getDate()<15)m=(m+11)%12;   // a 27th pushed into the next month
+  if(isMonthEndCard(ccType)&&bd.getDate()<15)m=(m+11)%12;   // a 27th pushed into the next month
   return`${MS[m]} ${cardDay(ccType)} Bill`;
 }
 
 // ═══════════════════════════════════════════════
 // ENTRY CRUD
 // ═══════════════════════════════════════════════
+// Save button. A second tap while a save is running (or right after it) is ignored —
+// double-taps used to log the same transaction twice.
+let _saving=false;
 async function addEntry(){
+  if(_saving)return;
+  _saving=true;
+  try{await _addEntry();}finally{setTimeout(()=>{_saving=false;},500);}
+}
+// "Clear" in the form header: a blank new entry (also leaves edit mode; the sheet stays open)
+function clearForm(){
+  editId=null;
+  g('form-title').innerText='Transaction Input';
+  g('sub-btn').innerText='💾 Save Entry';
+  g('can-btn').style.display='none';
+  g('type').value='Daily';g('currency').value='JPY';
+  g('label').value='';g('amount').value='';g('eur-total').value='';
+  g('date').value=localISO(new Date());g('ftag').style.display='none';
+  resetInvForm();handleTypeChange();
+}
+async function _addEntry(){
   const type=g('type').value;
   const lbl=g('label').value.trim();
   const rawAmt=parseFloat(g('amount').value);
@@ -1607,7 +1728,8 @@ async function addEntry(){
   }
 
   const prevE=editId?entries.find(e=>e.id===editId):null;
-  if(editId){entries[entries.findIndex(e=>e.id===editId)]=entry;cancelEdit();}
+  const wasNew=!editId;
+  if(editId){const ix=entries.findIndex(e=>e.id===editId);if(ix>=0)entries[ix]=entry;else entries.push(entry);cancelEdit();}
   else entries.push(entry);
   // flipped "deducted from salary" on one purchase → offer the same for that instrument's others
   if(entry.type==='Investment'&&prevE&&isPayroll(prevE)!==isPayroll(entry)){
@@ -1618,6 +1740,10 @@ async function addEntry(){
   }
   resetInvForm();
   g('eur-total').value='';
+  // a saved NEW entry leaves a clean form for the next one: label and amount are
+  // emptied and the date goes back to today (a kept back-date would silently
+  // mis-date the next entry); type and card stay, so several in a row stay quick
+  if(wasNew){g('label').value='';g('amount').value='';g('date').value=localISO(new Date());g('ftag').style.display='none';updateCCPre();renderPresetChips();}
   closeSB();   // dismiss the sheet + scrim after a save (Bug A)
   saveRender();
 }
@@ -1755,13 +1881,53 @@ async function fetchJSON(url,opts,ms){
   }catch(err){throw (err&&err.name==='AbortError')?new Error('timed out'):err;}
   finally{clearTimeout(t);}
 }
-// Returns 'ok' | 'conflict' | false.
-// Why sync "sometimes failed and then worked a moment later": pushes could OVERLAP
-// (an auto-save fired while the previous one was still in flight), so the second
-// carried a stale revision and bounced as a false conflict; and one-off network /
-// Apps Script hiccups had no retry. Now pushes run one at a time, transient failures
+
+// ═══════════════════════════════════════════════
+// SYNC SAFETY — the rules that keep a cloud copy from ever replacing newer data here
+//  1. "Unsent changes" flag. Set the moment anything changes on this device and
+//     cleared only when the cloud confirms exactly that state. It is STORED, so it
+//     survives the app being closed while a save was pending or had failed.
+//     While it is set, nothing may pull over this device's data: unsent changes are
+//     uploaded first, and if the cloud changed meanwhile YOU choose (merge / keep
+//     this device / take the cloud).
+//  2. Revision check. A cloud copy is only pulled when its revision is NEWER than
+//     the one this device last synced. Same revision → nothing to do. Lower
+//     revision (a rolled-back or replaced sheet) → never pulled automatically.
+//  3. Orphan check. Entries created here after the last confirmed sync that the
+//     cloud copy doesn't contain are treated as unsent even if the flag was lost.
+//  4. Undo. The data that was on this device is kept aside before any cloud copy
+//     replaces it (Settings → Undo last cloud update).
+// ═══════════════════════════════════════════════
+function markDirty(){_dirtySeq++;try{localStorage.setItem('financeTrackerDirty','1');}catch(_){}}
+function isDirty(){try{return localStorage.getItem('financeTrackerDirty')==='1';}catch(_){return _dirtySeq>0;}}
+// the cloud now holds what this device had at change-counter `seq` (omit = right now)
+function noteSynced(seq){
+  try{
+    localStorage.setItem('financeTrackerSyncAt',String(Date.now()));
+    if(seq===undefined||seq===_dirtySeq)localStorage.removeItem('financeTrackerDirty');
+  }catch(_){}
+}
+function lastSyncAt(){try{const v=Number(localStorage.getItem('financeTrackerSyncAt'));return v>0?v:Infinity;}catch(_){return Infinity;}}
+// entries created on this device since the last confirmed sync that a cloud copy lacks
+// (entry ids are their creation time)
+function orphanEntries(data){
+  const ids=new Set((data.entries||[]).map(e=>String(e.id))),since=lastSyncAt();
+  return entries.filter(e=>!ids.has(String(e.id))&&Number(e.id)>since);
+}
+// What a freshly downloaded cloud copy means for this device.
+function cloudVerdict(data){
+  const rev=Number(data.rev);
+  if(isDirty())return 'dirty';
+  if(!isNaN(rev)&&rev<cloudRev)return 'older';
+  if(orphanEntries(data).length)return 'orphans';
+  if(!(data.entries||[]).length&&entries.length)return 'empty';
+  if(!isNaN(rev)&&rev===cloudRev)return 'same';
+  return 'newer';
+}
+
+// Returns 'ok' | 'conflict' | false. Pushes run one at a time; transient failures
 // retry with back-off, and every attempt carries the same pushId so the script
-// recognises a retry of a push that already landed (v3.8) instead of refusing it.
+// recognises a retry of a push that already landed instead of refusing it.
 let _pushing=null,_retryT=null;
 async function pushCloud(force){
   if(!urlOk()){setSyncStatus('error','No cloud URL set');return false;}
@@ -1772,6 +1938,7 @@ async function pushCloud(force){
 async function _pushOnce(force){
   clearTimeout(_retryT);
   setSyncStatus('saving');
+  const seq=_dirtySeq;                       // which state is being uploaded
   const body=cloudPayload(force);
   body.pushId=Date.now().toString(36)+Math.random().toString(36).slice(2,8);
   let lastErr='';
@@ -1779,12 +1946,13 @@ async function _pushOnce(force){
     if(attempt)await _sleep(attempt===1?1500:4500);
     try{
       const out=await fetchJSON(CLOUD_URL,{method:'POST',body:JSON.stringify(body),headers:{'Content-Type':'text/plain;charset=utf-8'}},35000);
-      if(out&&out.conflict){setSyncStatus('error','Conflict — sync to resolve');return 'conflict';}
+      if(out&&out.conflict){setSyncStatus('error','This device and the cloud both changed — tap Sync');return 'conflict';}
       if(out&&out.error){
         if(out.error==='unauthorized'){setSyncStatus('error','Access token rejected');return false;}
         lastErr=out.error;continue;                  // "busy" / sheet timeouts → retry
       }
-      if(out&&out.rev!=null){cloudRev=out.rev;localStorage.setItem('financeTrackerRev',cloudRev);}
+      if(out&&out.rev!=null){cloudRev=Number(out.rev);localStorage.setItem('financeTrackerRev',cloudRev);}
+      noteSynced(seq);                               // clears the unsent flag unless you changed something meanwhile
       setSyncStatus('saved');return 'ok';
     }catch(err){lastErr=(err&&err.message)||String(err);}
   }
@@ -1793,10 +1961,7 @@ async function _pushOnce(force){
   return false;
 }
 let _cpT=null;
-function scheduleCloudPush(){clearTimeout(_cpT);setSyncStatus('saving');_cpT=setTimeout(()=>{_cpT=null;pushCloud(false);},700);}
-// retry unsent changes as soon as the phone is back online / the app is reopened
-window.addEventListener('online',()=>{if(_lastSync==='error'&&urlOk())pushCloud(false);});
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&_lastSync==='error'&&urlOk())pushCloud(false);});
+function scheduleCloudPush(){markDirty();clearTimeout(_cpT);setSyncStatus('saving');_cpT=setTimeout(()=>{_cpT=null;pushCloud(false);},700);}
 function persist(){persistLocal();scheduleCloudPush();}
 
 async function saveRender(){
@@ -1804,81 +1969,212 @@ async function saveRender(){
   renderDashboard();
   scheduleCloudPush();
 }
-// explicit full upload with clear confirmation + conflict resolution
-async function pushAll(){
-  if(!urlOk()){alert("Set your Google Apps Script URL first (⚙️ Cloud).");openCloud();return;}
-  if(!entries.length&&!recItems.length){if(!confirm("Local data looks empty. Push anyway? This will overwrite the cloud with empty data."))return;}
+
+// ── replacing this device's data with a cloud copy (the ONLY place that does it) ──
+function stashUndo(){
+  try{localStorage.setItem('financeTrackerUndo',JSON.stringify({at:Date.now(),entries,recItems,holdings,trackedInv,snapshots,dflts,
+    presets,forecastVars,paydayOverrides,eurRate,expInc,nisaCap}));}catch(_){}
+}
+function undoInfo(){
+  try{const u=JSON.parse(localStorage.getItem('financeTrackerUndo')||'null');return (u&&Array.isArray(u.entries))?u:null;}catch(_){return null;}
+}
+function applyCloudData(data){
+  stashUndo();
+  entries=(data.entries||[]).filter(e=>e.id).map(e=>{e.date=toISO(e.date);migrateType(e);if(e.billDate)e.billDate=toISO(e.billDate);if(e.units===''||e.units===null)delete e.units;return e;});
+  if(data.rev!=null){cloudRev=Number(data.rev);localStorage.setItem('financeTrackerRev',cloudRev);}
+  if(Array.isArray(data.tracked))  trackedInv=data.tracked;   // before units: matching needs the instruments
+  const prices=data.prices||{};
+  entries.forEach(e=>{const p=prices[String(e.id)];if(p)e.unitPrice=p;});
+  recomputeUnits();
+  if(Array.isArray(data.recurring))recItems=data.recurring;
+  if(Array.isArray(data.holdings)) holdings=data.holdings;
+  if(Array.isArray(data.snapshots))snapshots=data.snapshots;
+  if(data.defaults&&typeof data.defaults==='object'&&Object.keys(data.defaults).length)dflts=data.defaults;
+  if(data.eurRate!=null&&!isNaN(parseFloat(data.eurRate)))eurRate=parseFloat(data.eurRate);
+  if(data.expInc!=null&&!isNaN(parseFloat(data.expInc)))  expInc=parseFloat(data.expInc);
+  if(data.nisaCap!=null&&!isNaN(parseInt(data.nisaCap))&&parseInt(data.nisaCap)>0)nisaCap=parseInt(data.nisaCap);
+  if(data.paydayOv&&typeof data.paydayOv==='object'){paydayOverrides=data.paydayOv;localStorage.setItem('financeTrackerPaydayOv',JSON.stringify(paydayOverrides));}
+  if(Array.isArray(data.forecastVars))forecastVars=data.forecastVars;
+  if(Array.isArray(data.presets)&&data.presets.length)presets=data.presets;
   persistLocal();
+  noteSynced();                                       // this device now equals the cloud
+  {const a=g('eur-r-inp'),b=g('exp-inc-inp');if(a)a.value=eurRate;if(b)b.value=expInc;}
+  if(typeof buildTplUI==='function')buildTplUI();
+  renderPresetChips();renderRMList();renderDashboard();setSyncStatus('saved');
+}
+async function undoLastSync(){
+  const u=undoInfo();
+  if(!u){uiAlert("Nothing to undo — no cloud copy has replaced this device's data yet.",'Undo last cloud update');return;}
+  const d=new Date(u.at),when=`${fmt(d)} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  if(!await uiConfirm(`Bring back the data this device had just before the last cloud update (${when} — ${u.entries.length} transactions)?\n\nIt replaces what is here now (${entries.length} transactions) and is then uploaded, so the cloud will match it.`,{title:'Undo last cloud update',yes:'Bring it back',danger:false}))return;
+  stashUndo();                                        // …so this undo can itself be undone
+  entries=u.entries;recItems=u.recItems||[];holdings=u.holdings||[];trackedInv=u.trackedInv||trackedInv;snapshots=u.snapshots||[];
+  if(u.dflts)dflts=u.dflts;if(Array.isArray(u.presets))presets=u.presets;if(Array.isArray(u.forecastVars))forecastVars=u.forecastVars;
+  if(u.paydayOverrides)paydayOverrides=u.paydayOverrides;
+  if(u.eurRate)eurRate=u.eurRate;if(u.expInc!=null)expInc=u.expInc;if(u.nisaCap)nisaCap=u.nisaCap;
+  normalizeEntries();recomputeUnits();
+  {const a=g('eur-r-inp'),b=g('exp-inc-inp');if(a)a.value=eurRate;if(b)b.value=expInc;}
+  if(typeof buildTplUI==='function')buildTplUI();
+  renderPresetChips();renderRMList();
+  saveRender();
+  if(typeof renderUndoInfo==='function')renderUndoInfo();
+  toast('Earlier data restored — uploading it now');
+}
+
+// ── automatic check: on start-up, on coming back to the app, on reconnecting ──
+// Uploads unsent changes, or pulls a NEWER cloud copy — never anything else, and
+// never while you're in the entry form.
+let _autoBusy=false,_lastAuto=0;
+async function autoSync(){
+  if(!urlOk()||_autoBusy)return 'skip';
+  {const sb=g('sidebar');if(sb&&sb.classList.contains('open'))return 'skip';}
+  _autoBusy=true;
+  try{
+    if(isDirty()){
+      const r=await pushCloud(false);
+      if(r==='conflict')toast('This device and the cloud both changed — tap Sync to choose what to keep');
+      return r==='ok'?'pushed':(r||'offline');
+    }
+    let info;
+    try{info=await fetchJSON(gurl('peek=1'),{},20000);}catch(_){return 'offline';}
+    if(!info||info.error||Array.isArray(info))return 'offline';
+    const rev=Number(info.rev);
+    if(isNaN(rev))return 'skip';
+    if(rev===cloudRev){noteSynced();setSyncStatus('saved');return 'same';}
+    if(rev<cloudRev){
+      setSyncStatus('error','The cloud copy is OLDER than this device — nothing was pulled');
+      toast('The cloud copy looks older than this device — nothing was pulled. Tap Sync to decide.');
+      return 'older';
+    }
+    // a script older than v3.9 ignores ?peek and has already sent everything
+    const data=info.entries?info:await fetchJSON(gurl(),{},35000);
+    if(!data||data.error||Array.isArray(data))return 'offline';
+    const v=cloudVerdict(data);                     // judged AFTER the download — you may have typed meanwhile
+    if(v==='newer'){
+      const before=entries.length;
+      applyCloudData(data);
+      const n=entries.length-before;
+      toast('Updated from the cloud'+(n?` (${n>0?'+':''}${n} transaction${Math.abs(n)===1?'':'s'})`:''));
+      return 'pulled';
+    }
+    if(v==='orphans'||v==='dirty'){
+      markDirty();setSyncStatus('error','This device and the cloud both changed — tap Sync');
+      toast('This device and the cloud both changed — tap Sync to choose what to keep');
+    } else if(v==='empty'){
+      setSyncStatus('error','The cloud copy is empty — nothing was pulled');
+    }
+    return v;
+  }catch(_){return 'offline';}
+  finally{_autoBusy=false;_lastAuto=Date.now();}
+}
+function wakeSync(){
+  if(!_bootReady||!urlOk())return;
+  if(isDirty()||Date.now()-_lastAuto>5*60*1000)autoSync();
+}
+window.addEventListener('online',wakeSync);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')wakeSync();});
+window.addEventListener('load',()=>{
+  const done=()=>{if(_bootReady)return;_bootReady=true;renderDashboard();setTimeout(maybeRefreshHolidays,3000);};
+  if(!urlOk()){done();return;}
+  setTimeout(done,12000);                             // a bad connection must not hold the app back
+  autoSync().then(done,done);
+});
+
+// explicit full upload
+async function pushAll(){
+  if(!urlOk()){uiAlert("Set your Google Apps Script URL first (Settings → Cloud Connection).");openCloud();return;}
+  if(!entries.length&&!recItems.length&&!await uiConfirm("This device has no data. Push anyway? The cloud would be overwritten with an empty ledger.",{title:'Nothing to push',yes:'Push empty'}))return;
+  persistLocal();markDirty();
   showLoader('Pushing to the cloud');
   try{
     let r=await pushCloud(false);
     if(r==='conflict'){
-      if(confirm("⚠️ The cloud was changed on another device since this one last synced.\n\nOK = overwrite the cloud with THIS device's data.\nCancel = pull the other device's version instead.")){
-        r=await pushCloud(true);
-      } else { await syncCloud(); return; }
+      if(!await uiConfirm("The cloud was changed from another device since this one last synced.\n\nOverwrite the cloud with THIS device's data? (Tap Sync instead if you'd rather merge or take the cloud copy.)",{title:'The cloud has other changes',yes:'Overwrite the cloud'}))return;
+      r=await pushCloud(true);
     }
-    alert(r==='ok'?"✅ Pushed everything to the cloud.":"❌ Push failed. Open ⚙️ Cloud → Test Connection to diagnose.");
+    if(r==='ok')finishLoader('Saved to the cloud');
+    else uiAlert("The cloud couldn't be reached. Your data is safe on this device and will upload automatically when the connection is back.",'Push failed');
   } finally { hideLoader(); }
 }
-async function syncCloud(){
-  if(!urlOk()){alert("Set your Google Apps Script URL first (⚙️ Cloud).");openCloud();return;}
-  const btn=document.getElementById('sync-btn');btn.innerText="⏳...";
-  showLoader('Fetching from the cloud');
+// The Sync button. Returns true when this device and the cloud agree afterwards.
+async function syncCloud(_again){
+  if(!urlOk()){uiAlert("Set your Google Apps Script URL first (Settings → Cloud Connection).");openCloud();return false;}
+  for(let i=0;i<60&&_autoBusy;i++)await _sleep(150);  // let a background check finish first
+  setSyncBusy(true);
+  showLoader('Checking the cloud');
   try{
-    // unsent local changes go up FIRST — a pull would otherwise overwrite them
-    if(_cpT||_lastSync==='saving'||_lastSync==='error'){
-      clearTimeout(_cpT);_cpT=null;
+    clearTimeout(_cpT);_cpT=null;
+    let conflict=false;
+    // 1 ── unsent changes on this device go up FIRST; a pull must never run over them
+    if(isDirty()){
       const pr=await pushCloud(false);
-      if(pr===false&&!await uiConfirm("Your latest changes on this device haven't reached the cloud yet. Pull the cloud copy anyway? (Those unsent changes would be replaced.)")){btn.innerText="☁️ Sync";return false;}
+      if(pr==='conflict')conflict=true;
+      else if(pr!=='ok'){
+        uiAlert("The cloud couldn't be reached, so nothing was changed. Your entries are safe on this device and will upload automatically when the connection is back.",'Not synced');
+        return false;
+      }
     }
+    // 2 ── download the cloud copy
     let data=null,lastErr=null;
     for(let i=0;i<3&&!data;i++){
       if(i)await _sleep(i===1?1500:4500);
       try{data=await fetchJSON(gurl(),{},35000);}catch(err){lastErr=err;}
     }
     if(!data)throw lastErr||new Error('no reply');
-    if(data&&data.error==='unauthorized')throw new Error("Access token rejected. Check ⚙️ Cloud → Access token.");
-    if(data&&data.error)throw new Error(data.error);
-    // refunds (bill date) + broker-confirmed units need the v3.8 script columns
-    {const v=parseFloat(String((data&&data.version)||'').replace(/[^\d.]/g,''));
+    if(data.error==='unauthorized')throw new Error("Access token rejected. Check Settings → Access token.");
+    if(data.error)throw new Error(data.error);
+    if(Array.isArray(data)){uiAlert("Connected, but the Apps Script is a very old version. Paste the current Kod.gs and deploy it as a New version, then Sync again.",'Old cloud script');return false;}
+    {const v=parseFloat(String(data.version||'').replace(/[^\d.]/g,''));
      let warned=false;try{warned=!!sessionStorage.getItem('mtVerWarn');sessionStorage.setItem('mtVerWarn','1');}catch(_){}
-     if(v&&v<3.8&&!warned)alert("Your cloud script is "+data.version+". Please paste the new Kod.gs (v3.8) and deploy it as a New version — card refunds and broker-confirmed units are only saved correctly with v3.8.");}
-    const ents=Array.isArray(data)?data:(data.entries||[]);
-    const cleaned=ents.filter(e=>e.id).map(e=>{e.date=toISO(e.date);migrateType(e);if(e.billDate)e.billDate=toISO(e.billDate);if(e.units===''||e.units===null)delete e.units;return e;});
-    // safety: don't silently wipe local data if the cloud came back empty
-    if(cleaned.length===0&&entries.length>0){
-      if(!confirm("The cloud returned no transactions, but you have local data. Pull anyway? (This replaces your local data with the empty cloud copy.)")){
-        btn.innerText="☁️ Sync";return;
+     if(v&&v<3.9&&!warned)uiAlert("Your cloud script is "+data.version+". Everything still works, but please paste the new Kod.gs (v3.9) and deploy it as a New version — it saves more safely and makes the start-up check faster.",'Cloud script update');}
+    // 3 ── both sides changed → you decide; nothing is dropped silently
+    if(conflict){
+      const mine=orphanEntries(data);
+      const choices=[];
+      if(mine.length)choices.push({label:`Merge — keep the cloud copy and add this device's ${mine.length} new entr${mine.length===1?'y':'ies'}`,value:'merge',cls:'bp'});
+      choices.push({label:"Keep this device only (overwrite the cloud)",value:'mine',cls:mine.length?'bg':'bp'});
+      choices.push({label:"Take the cloud copy only (drop this device's unsent changes)",value:'cloud',cls:'bred'});
+      choices.push({label:'Cancel — decide later',value:null,cls:'bg'});
+      const c=await uiChoice("This device has changes that were never uploaded, and the cloud was changed from another device in the meantime.\n\n"+
+        (mine.length?"Merge is the safe choice when you only ADDED entries here. (Edits or deletions of older entries made on this device are not carried over by a merge.)":"Choose which copy to keep.")+
+        "\n\nWhatever you pick, the data on this device right now can be brought back from Settings → Undo last cloud update.",{title:'Two versions exist',choices});
+      if(c==='merge'){
+        const add=JSON.parse(JSON.stringify(mine));
+        applyCloudData(data);
+        entries.push(...add);recomputeUnits();
+        saveRender();clearTimeout(_cpT);_cpT=null;
+        await pushCloud(false);
+        return !isDirty();
       }
+      if(c==='mine'){
+        const r=await pushCloud(true);
+        if(r!=='ok'){uiAlert("The cloud couldn't be reached — nothing was changed.",'Not synced');return false;}
+        return true;
+      }
+      if(c!=='cloud')return false;
+      applyCloudData(data);
+      return true;
     }
-    entries=cleaned;
-    if(!Array.isArray(data)){
-      if(data.rev!=null){cloudRev=data.rev;localStorage.setItem('financeTrackerRev',cloudRev);}
-      if(Array.isArray(data.tracked))  trackedInv=data.tracked;   // before units: matching needs the instruments
-      const prices=data.prices||{};
-      entries.forEach(e=>{const p=prices[String(e.id)];if(p)e.unitPrice=p;});
-      recomputeUnits();
-      if(Array.isArray(data.recurring))recItems=data.recurring;
-      if(Array.isArray(data.holdings)) holdings=data.holdings;
-      if(Array.isArray(data.snapshots))snapshots=data.snapshots;
-      if(data.defaults&&typeof data.defaults==='object'&&Object.keys(data.defaults).length)dflts=data.defaults;
-      if(data.eurRate!=null&&!isNaN(parseFloat(data.eurRate)))eurRate=parseFloat(data.eurRate);
-      if(data.expInc!=null&&!isNaN(parseFloat(data.expInc)))  expInc=parseFloat(data.expInc);
-      if(data.nisaCap!=null&&!isNaN(parseInt(data.nisaCap))&&parseInt(data.nisaCap)>0)nisaCap=parseInt(data.nisaCap);
-      if(data.paydayOv&&typeof data.paydayOv==='object'){paydayOverrides=data.paydayOv;localStorage.setItem('financeTrackerPaydayOv',JSON.stringify(paydayOverrides));}
-      if(Array.isArray(data.forecastVars))forecastVars=data.forecastVars;
-      if(Array.isArray(data.presets)&&data.presets.length)presets=data.presets;
-    } else {
-      alert("⚠️ Connected, but your Apps Script is an OLD version (it only returns transactions, not recurring/holdings). Update the script to v2.6 and redeploy a NEW version, then Sync again.");
+    // 4 ── normal case: pull only what is genuinely newer
+    const v=cloudVerdict(data);
+    if(v==='same'){noteSynced();setSyncStatus('saved');return true;}
+    if(v==='dirty'||v==='orphans'){                   // unsent changes surfaced during the download
+      markDirty();
+      if(_again)return false;
+      return await syncCloud(true);
     }
-    persistLocal();
-    document.getElementById('eur-r-inp').value=eurRate;
-    document.getElementById('exp-inc-inp').value=expInc;
-    buildTplUI();renderRMList();renderDashboard();setSyncStatus('saved');
-    btn.innerText="☁️ Sync";
-  }catch(err){btn.innerText="☁️ Sync";setSyncStatus('error');alert("Cloud sync failed: "+err.message+"\n\nOpen ⚙️ Cloud → Test Connection to check your URL/deployment.");}
-  finally{hideLoader();}
+    if(v==='older'&&!await uiConfirm(`The cloud copy is OLDER (revision ${data.rev}) than what this device last synced (revision ${cloudRev}) — for example a backup was restored or the sheet was replaced.\n\nReplace this device's data with that older copy?`,{title:'Older cloud copy',yes:'Use the older copy'})){
+      setSyncStatus('error','The cloud copy is older than this device');return false;
+    }
+    if(v==='empty'&&!await uiConfirm("The cloud returned no transactions, but this device has data. Replace this device's data with the empty cloud copy?",{title:'Empty cloud copy',yes:'Replace with empty'})){
+      setSyncStatus('error','The cloud copy is empty');return false;
+    }
+    applyCloudData(data);
+    return true;
+  }catch(err){setSyncStatus('error');uiAlert("Cloud sync failed: "+err.message+"\n\nIt was retried 3 times. Nothing on this device was changed. Check your connection, or open Settings → Test connection.",'Sync failed');return false;}
+  finally{setSyncBusy(false);hideLoader();}
 }
+
 // Refresh prices for BOTH tracked instruments and holdings in one pass (browser-side).
 async function refreshMarketPrices(silent){
   const tT=trackedInv.filter(t=>t.ticker), tH=holdings.filter(h=>h.ticker);
@@ -1908,7 +2204,14 @@ async function syncAndRefresh(){
   }
 }
 // ── cloud settings modal ──
-function openCloud(){document.getElementById('cloud-url-inp').value=CLOUD_URL;document.getElementById('cloud-token-inp').value=cloudToken;document.getElementById('cloud-test-out').innerHTML='';document.getElementById('cloud-modal').style.display='flex';}
+function renderUndoInfo(){
+  const el=g('undo-info');if(!el)return;
+  const u=undoInfo();
+  if(!u){el.innerText="Whenever a cloud copy replaces this device's data, the previous data is kept here so it can be brought back. Nothing has been replaced yet.";return;}
+  const d=new Date(u.at);
+  el.innerText=`Kept: this device's data from ${fmt(d)} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} (${u.entries.length} transactions), just before the last cloud copy replaced it.`;
+}
+function openCloud(){renderHolidayInfo();renderUndoInfo();document.getElementById('cloud-url-inp').value=CLOUD_URL;document.getElementById('cloud-token-inp').value=cloudToken;document.getElementById('cloud-test-out').innerHTML='';document.getElementById('cloud-modal').style.display='flex';}
 function saveCloudUrl(){
   const v=document.getElementById('cloud-url-inp').value.trim();
   if(v&&!v.startsWith('https://script.google.com')){if(!confirm("That doesn't look like an Apps Script /exec URL. Save anyway?"))return;}
@@ -1954,7 +2257,7 @@ async function restoreCloudBackup(){
     const res=await fetch(CLOUD_URL,{method:'POST',body:JSON.stringify({action:'restoreBackup',sheet,token:cloudToken}),headers:{'Content-Type':'text/plain;charset=utf-8'}});
     const r=await res.json();
     if(r.error)throw new Error(r.error);
-    if(r.rev!=null){cloudRev=r.rev;localStorage.setItem('financeTrackerRev',cloudRev);}
+
     out.innerHTML='<span style="color:var(--green);">Restored. Pulling…</span>';
     await syncCloud();
     out.innerHTML='<span style="color:var(--green);">✅ Ledger restored from '+esc(sheet.replace('Bak_',''))+'.</span>';
@@ -1971,7 +2274,7 @@ function toggleTheme(){applyTheme(document.body.classList.contains('light')?'dar
 function setNisaCap(){
   const v=prompt("Annual NISA contribution cap (¥). Tsumitate is ¥1,200,000; new-NISA total is ¥3,600,000.",nisaCap);
   if(v===null)return;const n=parseInt(String(v).replace(/[^0-9]/g,''));
-  if(!isNaN(n)&&n>0){nisaCap=n;persistLocal();renderDashboard();}
+  if(!isNaN(n)&&n>0){nisaCap=n;persist();renderDashboard();}
 }
 // Manual payday override for holiday-shifted months (kept simple — saved on this device).
 function adjustPayday(){
@@ -2076,12 +2379,14 @@ function computeCycle(start,end){
   return {income,salary,bonus,addl,spent,cashSub,bills};
 }
 // Free-to-spend for a pay cycle. The income kinds never interact:
-//   base = max(salary received, expected salary) + bonus + additional income
+//   base = the salary received this cycle (or, until it arrives, the expected
+//          salary) + bonus + additional income
 //   free = base − spending landing in the cycle (cash by date, cards by bill date)
 //          − cash recurring still due in the cycle
 function cycleLeeway(cyc){
   const cd=computeCycle(cyc.start,cyc.end),rec=cycleRecUnpaid(cyc.start,cyc.end);
-  const salaryBase=Math.max(cd.salary,expInc),extra=cd.income-cd.salary,base=salaryBase+extra;
+  // once the salary is in, the real figure is used even when it is below the expectation
+  const salaryBase=cd.salary>0?cd.salary:expInc,extra=cd.income-cd.salary,base=salaryBase+extra;
   return {cd,rec,salaryBase,extra,base,leeway:base-cd.spent-rec.cash};
 }
 // unpaid CASH recurring whose due date falls within the window (card-paid excluded — billed later)
@@ -2166,8 +2471,8 @@ function autoSettleRecurring(year, month) {
 
   if (changed) {
     localStorage.setItem('financeTrackerData',JSON.stringify(entries));
-    // NOTE: no cloud POST here — that ran on every render/resize and spammed
-    // the script. Auto-settled rows are pushed on the next Save or manual Sync.
+    // upload them like any other change (debounced; this branch runs once per item)
+    scheduleCloudPush();
   }
   return changed;
 }
@@ -2517,7 +2822,7 @@ function recomputeUnits(){
     if(e.type!=='Investment'||e.currency==='EUR'||!(e.unitPrice>0))continue;
     if(e.unitRound==='manual'&&e.units>0)continue;
     const inst=matchTracked(e.label),ut=e.unitType||(inst&&inst.unitType)||'口';
-    if(ut==='口'&&(!e.unitRound||e.unitRound==='auto'))e.unitRound='up';
+    if(ut==='口'&&!e.unitRound)e.unitRound='up';
     e.units=calcUnits(Math.abs(e.amount),e.unitPrice,e.unitRound||'up',ut);
   }
 }
@@ -2628,27 +2933,48 @@ function delTracked(id){if(!confirm("Remove this tracked instrument? (Your logge
 // ═══════════════════════════════════════════════
 // NET-WORTH SNAPSHOTS  (monthly growth history)
 // ═══════════════════════════════════════════════
+// The chart is rebuilt from the ledger whenever it is shown (netWorthSeries), so
+// corrections to old entries flow into the history. The stored `snapshots` list is
+// just a copy kept for the Sheet's Snapshots tab, refreshed when a new month starts.
 function maybeSnapshot(net,parts){
-  if(!entries.length)return;                       // don't snapshot an empty/unsynced state
+  maybeSnapshot._live={net,parts};
+  if(!entries.length||!_bootReady)return;          // never before the start-up cloud check
   const ym=`${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,'0')}`;
-  if(snapshots.some(s=>s.ym===ym))return;          // already captured this month
-  snapshots.push({ym,date:localISO(TODAY),net:Math.round(net),
-    cash:Math.round(parts.cash),eur:Math.round(parts.eur),nisa:Math.round(parts.nisa),
-    stk:Math.round(parts.stk),hold:Math.round(parts.hold)});
-  snapshots.sort((a,b)=>a.ym<b.ym?-1:1);
+  let v='';try{v=localStorage.getItem('financeTrackerSnapV')||'';}catch(_){}
+  if(v==='2'&&snapshots.some(s=>s.ym===ym))return; // already rebuilt for this month
+  snapshots=netWorthSeries();
+  try{localStorage.setItem('financeTrackerSnapV','2');}catch(_){}
   persist();
 }
-function takeSnapshotNow(){
-  const ym=`${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,'0')}`;
-  snapshots=snapshots.filter(s=>s.ym!==ym);        // overwrite this month with the latest value
-  renderDashboard();                               // recompute → maybeSnapshot re-adds it
-  renderNetWorthChart();
-  alert("📸 Snapshot saved for "+ym+".");
+// [{ym,date,net,cash,eur,nisa,stk,hold}] — every month from the first cash entry to
+// now. Past months: position on their last day, investments at cost (old market
+// prices aren't stored). Current month: the live figure incl. today's prices.
+function netWorthSeries(){
+  const dates=entries.map(e=>e.date).filter(Boolean).sort();
+  if(!dates.length)return [];
+  const out=[],cy=TODAY.getFullYear(),cm=TODAY.getMonth(),live=maybeSnapshot._live;
+  let y=+dates[0].slice(0,4),m=+dates[0].slice(5,7)-1,started=false;
+  while(y<cy||(y===cy&&m<=cm)){
+    const ym=`${y}-${String(m+1).padStart(2,'0')}`;
+    if(y===cy&&m===cm&&live){
+      out.push({ym,date:localISO(TODAY),net:Math.round(live.net),cash:Math.round(live.parts.cash),eur:Math.round(live.parts.eur),
+        nisa:Math.round(live.parts.nisa),stk:Math.round(live.parts.stk),hold:Math.round(live.parts.hold)});
+    } else {
+      const end=new Date(y,m+1,0,23,59,59,999),p=positionAt(end),eurV=p.w.eur*eurRate;
+      if(started||p.w.jpy!==0){
+        started=true;
+        out.push({ym,date:localISO(end),net:Math.round(p.w.jpy+eurV+p.w.nisa+p.w.stk-p.pendingCC),cash:Math.round(p.w.jpy),
+          eur:Math.round(eurV),nisa:Math.round(p.w.nisa),stk:Math.round(p.w.stk),hold:0});
+      }
+    }
+    m++;if(m>11){m=0;y++;}
+  }
+  return out;
 }
 function renderNetWorthChart(){
   const box=g('nw-chart');if(!box)return;
-  if(snapshots.length<1){box.innerHTML='<div class="muted" style="font-size:.82rem;">No snapshots yet. One is logged automatically the first time you open the app each month.</div>';return;}
-  const data=snapshots.slice().sort((a,b)=>a.ym<b.ym?-1:1);
+  const data=netWorthSeries();
+  if(data.length<1){box.innerHTML='<div class="muted" style="font-size:.82rem;">Nothing to chart yet — add your starting cash first.</div>';return;}
   const W=Math.max(320,data.length*70),H=180,pad=34;
   const vals=data.map(s=>s.net),max=Math.max(...vals,1),min=Math.min(...vals,0);
   const span=(max-min)||1;
@@ -2659,7 +2985,7 @@ function renderNetWorthChart(){
     `<text x="${x(i)}" y="${y(s.net)-9}" font-size="9" fill="var(--text,#ddd)" text-anchor="middle">${(s.net/1000).toFixed(0)}k</text>`+
     `<text x="${x(i)}" y="${H-pad+14}" font-size="9" fill="var(--muted)" text-anchor="middle">${s.ym.slice(2)}</text>`).join('');
   const first=data[0].net,last=data[data.length-1].net,chg=last-first,pct=first?(chg/first*100):0;
-  box.innerHTML=`<div style="font-size:.8rem;margin-bottom:6px;">Latest: <strong>${jpy(last)}</strong>`+
+  box.innerHTML=`<div style="font-size:.8rem;margin-bottom:6px;">Now: <strong>${jpy(last)}</strong>`+
     (data.length>1?` <span style="color:${chg>=0?'var(--green)':'var(--red)'};">(${chg>=0?'+':''}${jpy(chg)} · ${chg>=0?'+':''}${pct.toFixed(1)}% since ${data[0].ym})</span>`:'')+`</div>`+
     `<div style="overflow-x:auto;"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:100%;">`+
     `<polyline points="${pts}" fill="none" stroke="var(--green)" stroke-width="2"></polyline>${dots}</svg></div>`;
@@ -2833,7 +3159,7 @@ function projectedCardBills(year,month){
       const amt=amtForMonth(item,km);
       const val=item.currency==='EUR'?amt*eurRate:amt;
       const pseudo={label:item.name,amount:-Math.abs(val),currency:'JPY',ccType:card,date:occStr,_projected:true};
-      if(cardDay(card)===27){cc27+=Math.abs(val);cc27Ents.push(pseudo);}
+      if(isMonthEndCard(card)){cc27+=Math.abs(val);cc27Ents.push(pseudo);}
       else{cc10+=Math.abs(val);cc10Ents.push(pseudo);}
     }
   }
@@ -2858,7 +3184,7 @@ function computeMonthData(year,month){
       const bd=getBillDate(e);
       if(bd&&bd>=mS&&bd<=mE){
         const owed=-val;                                  // + purchase, − refund/credit
-        if(cardDay(e.ccType)===27){cc27+=owed;cc27Ents.push(e);}
+        if(isMonthEndCard(e.ccType)){cc27+=owed;cc27Ents.push(e);}
         else{cc10+=owed;cc10Ents.push(e);}
       }
     } else if(e.type!=='Current Cash Setup'&&e.type!=='Investment'){
@@ -2891,7 +3217,8 @@ function computeMonthData(year,month){
 // MAIN RENDER
 // ═══════════════════════════════════════════════
 function g(id){return document.getElementById(id);}
-function jpy(n){return`¥${n.toLocaleString(undefined,{maximumFractionDigits:0})}`;}
+// ¥ with a proper minus in front (−¥5,000, not ¥-5,000)
+function jpy(n){const v=Math.round(Number(n)||0);return (v<0?'−':'')+'¥'+Math.abs(v).toLocaleString();}
 
 // ═══════════════════════════════════════════════
 // FORWARD PROJECTION ENGINE
@@ -2935,7 +3262,9 @@ function currentMonthRemaining(){
   let ccDueLater=0;
   [...md.cc10Ents,...md.cc27Ents].forEach(e=>{const bd=getBillDate(e);if(bd&&bd>TODAY)ccDueLater+=-(e.currency==='EUR'?e.amount*(e.purchaseRate||eurRate):e.amount);});
   // only SALARY counts against the expected salary (bonus / additional income don't)
-  const incomeRemain=Math.max(0,expInc-md.salary);
+  // …and once this month's salary has arrived nothing more is expected, even if it
+  // came in lower than the expectation
+  const incomeRemain=md.salary>0?0:expInc;
   return {incomeRemain,recCash,recInv,recCard,ccDueLater};
 }
 // project to the END of (ty,tm). Returns null for past months.
@@ -2966,60 +3295,62 @@ function projectPosition(ty,tm,startCash,startNet){
   return {cashK,cashT,netK,netT};
 }
 
+// Is this investment a NISA one? Label contains "nisa", or it matches an instrument
+// ticked as NISA in Tickers — the same rule for the meter and the portfolio split.
+function nisaMatcher(){
+  const kw=trackedInv.filter(t=>t.nisa&&t.keyword).map(t=>t.keyword.toLowerCase());
+  return e=>{const l=(e.label||'').toLowerCase();return l.includes('nisa')||kw.some(k=>l.includes(k));};
+}
+// Where the money stood at the end of a given moment, straight from the ledger:
+// cash, euros, investments at cost, and card debt bought but not yet billed.
+function positionAt(asOf){
+  const w={jpy:0,nisa:0,stk:0,eur:0};let eurAcq=0,eurSpnd=0,pendingCC=0;
+  const isNisa=nisaMatcher();
+  for(const e of calcEntries()){
+    if(!e.date)continue;
+    const ed=new Date(e.date+'T00:00:00');
+    if(ed>asOf)continue;                             // not happened yet
+    const rate=e.purchaseRate||eurRate;
+    const val=e.currency==='EUR'?e.amount*rate:e.amount;
+    if(e.type==='Current Cash Setup'){
+      // starting balances: no cash outflow, just seed the buckets
+      if(e.currency==='EUR')w.eur+=Math.abs(e.amount);else w.jpy+=e.amount;
+    } else if(e.type==='Investment'){
+      if(!isPayroll(e))w.jpy+=val;                   // paid out of cash (val is negative) — unless it came straight out of salary
+      if(e.currency==='EUR'){
+        w.eur+=Math.abs(e.amount);                   // …and the euros land in the euro bucket
+        eurAcq+=Math.abs(e.amount);eurSpnd+=Math.abs(e.amount)*rate;
+      } else if(isNisa(e)){w.nisa+=Math.abs(val);}
+      else {w.stk+=Math.abs(val);}
+    } else if(isCardT(e.type)){
+      const bd=getBillDate(e);
+      if(bd&&bd<=asOf){if(e.currency==='EUR')w.eur+=e.amount;else w.jpy+=e.amount;}
+      else if(bd&&bd>asOf){pendingCC-=val;}          // a future credit lowers the debt
+    } else {
+      if(e.currency==='EUR')w.eur+=e.amount;else w.jpy+=e.amount;
+    }
+  }
+  return {w,eurAcq,eurSpnd,pendingCC};
+}
 function renderDashboard(){
   TODAY=new Date();   // refresh: an app left open across midnight must not use a stale "today"
   // ── TRIGGER AUTO SETTLE ENGINE ──
   // Only settle for the ACTUAL current month, never the month being browsed,
   // so navigating to past months can't spawn back-dated entries.
-  if (autoSettleRecurring(TODAY.getFullYear(), TODAY.getMonth())) {
+  if (_bootReady && autoSettleRecurring(TODAY.getFullYear(), TODAY.getMonth())) {
       console.log("Auto-settle engine logged an expired transaction successfully.");
   }
 
   updMNav();
   const todayEOD=new Date();todayEOD.setHours(23,59,59,999);
 
-  let w={jpy:0,nisa:0,stk:0,eur:0},eurAcq=0,eurSpnd=0,futInc=0,futExp=0,pendingCC=0;
-
-  for(const e of calcEntries()){
-    if(!e.date)continue;
-    const ed=new Date(e.date+'T00:00:00');
-    const rate=e.purchaseRate||eurRate;
-    const val=e.currency==='EUR'?e.amount*rate:e.amount;
-    const isFut=ed>todayEOD;
-
-    if(!isFut){
-      if(e.type==='Current Cash Setup'){
-        // starting balances: no cash outflow, just seed the buckets
-        if(e.currency==='EUR')w.eur+=Math.abs(e.amount);else w.jpy+=e.amount;
-      } else if(e.type==='Investment'){
-        const lbl=(e.label||'').toLowerCase();
-        if(!isPayroll(e))w.jpy+=val;                 // paid out of cash (val is negative) — unless it came straight out of salary
-        if(e.currency==='EUR'){
-          w.eur+=Math.abs(e.amount);                 // …and the euros land in the euro bucket
-          eurAcq+=Math.abs(e.amount);eurSpnd+=Math.abs(e.amount)*rate;
-        } else if(lbl.includes('nisa')){w.nisa+=Math.abs(val);}
-        else {w.stk+=Math.abs(val);}
-      } else if(isCardT(e.type)){
-        const bd=getBillDate(e);
-        if(bd&&bd<=todayEOD){if(e.currency==='EUR')w.eur+=e.amount;else w.jpy+=e.amount;}
-        else if(bd&&bd>todayEOD){pendingCC-=val;}          // a future credit lowers the debt
-      } else {
-        if(e.currency==='EUR')w.eur+=e.amount;else w.jpy+=e.amount;
-      }
-    }
-    if(isFut&&e.type!=='Current Cash Setup'&&e.type!=='Existing Debt Setup'){
-      if(val>0)futInc+=val;else futExp+=Math.abs(val);
-    }
-  }
+  const {w,eurAcq,eurSpnd,pendingCC}=positionAt(todayEOD);
 
   const md=computeMonthData(vY,vM);
   const recThisM=getRecForMonth(vY,vM);
-  const recUnpaid=recThisM.filter(r=>!isPaid(r.item,vY,vM));
-  const isCard=it=>it.payMethod&&it.payMethod!=='Cash';
-  const recUnpaidAmt=recUnpaid.reduce((s,r)=>isCard(r.item)?s:s+(r.item.currency==='EUR'?r.amount*eurRate:r.amount),0);
-  const recUnpaidCard=recUnpaid.reduce((s,r)=>isCard(r.item)?s+(r.item.currency==='EUR'?r.amount*eurRate:r.amount):s,0);
 
-  const profit=md.income-md.totalExp;
+  // same purchase-date basis as "Spent", so Income − Spent = Net in the summary bar
+  const profit=md.income-md.spend.total;
   g('s-inc').innerText=jpy(md.income);
   g('s-exp').innerText=jpy(md.spend.total);
   const sp=md.spend,brk=[`Cash: ${jpy(sp.cash)}`];
@@ -3041,17 +3372,16 @@ function renderDashboard(){
     const p=(cur-prv)/Math.abs(prv)*100;const up=p>=0;
     return `<span style="color:${up?'var(--green)':'var(--red)'};">${up?'▲':'▼'}${Math.abs(p).toFixed(0)}%</span>`;
   };
-  g('mom-cmp').innerHTML=`vs last month — Income ${delta(md.income,prev.income)} · Spent ${delta(md.spend.total,prev.spend.total)} · Net ${delta(md.netFlow,prev.netFlow)}`;
+  g('mom-cmp').innerHTML=`vs last month — Income ${delta(md.income,prev.income)} · Spent ${delta(md.spend.total,prev.spend.total)} · Net ${delta(md.income-md.spend.total,prev.income-prev.spend.total)}`;
 
   // ── NISA contribution tracker (current calendar year) ──
   // An Investment entry counts if its label contains "nisa" OR it matches a
   // tracked instrument flagged as NISA (⚙️ Tickers → NISA).
   const yr=TODAY.getFullYear();let nisaYTD=0;
-  const nisaKW=trackedInv.filter(t=>t.nisa&&t.keyword).map(t=>t.keyword.toLowerCase());
+  const isNisa=nisaMatcher();
   for(const e of entries){
     if(e.type!=='Investment'||e.currency==='EUR'||!e.date)continue;
-    const lbl=(e.label||'').toLowerCase();
-    if(!(lbl.includes('nisa')||nisaKW.some(kw=>lbl.includes(kw))))continue;
+    if(!isNisa(e))continue;
     if(new Date(e.date+'T00:00:00').getFullYear()!==yr)continue;
     nisaYTD+=Math.abs(e.amount);
   }
@@ -3075,7 +3405,7 @@ function renderDashboard(){
 
   g('c-nf').innerText=jpy(md.netFlow);
   g('c-nf').className=`cval ${md.netFlow>=0?'green':'red'}`;
-  g('c-nf-s').innerText=`Income ${jpy(md.income)} − Expenses ${jpy(md.totalExp)}`;
+  g('c-nf-s').innerText=`Income ${jpy(md.income)} − cash spending ${jpy(md.cashExp)} − card bills due this month ${jpy(md.cc10+md.cc27)}`;
 
   g('c-cc10').innerText=jpy(md.cc10);
   g('c-cc27').innerText=jpy(md.cc27);
@@ -3103,7 +3433,7 @@ function renderDashboard(){
   const netWorth=w.jpy+eurV+w.nisa+w.stk+holdMkt+mtmAdj-pendingCC;
   g('w-net').innerText=jpy(netWorth);
   g('w-net').style.color=netWorth>=0?'var(--green)':'var(--red)';
-  g('w-net-det').innerHTML=(mtmAdj!==0?`incl. market ${mtmAdj>=0?'gain':'loss'} ${jpy(mtmAdj)}`:'')+
+  g('w-net-det').innerHTML=(mtmAdj!==0?`incl. market ${mtmAdj>=0?'gain':'loss'} ${jpy(Math.abs(mtmAdj))}`:'')+
     (pendingCC>0?`${mtmAdj!==0?' · ':''}after ${jpy(pendingCC)} card debt`:'');
   maybeSnapshot(netWorth,{cash:w.jpy,eur:eurV,nisa:w.nisa,stk:w.stk,hold:holdMkt});
 
@@ -3294,11 +3624,11 @@ function drawSankey() {
     } else if (mode === 'debt-10') {
       const cS = new Date(now.getFullYear(), now.getMonth()-1, 16);
       const cE = new Date(now.getFullYear(), now.getMonth(),   15, 23, 59, 59);
-      if (ed >= cS && ed <= cE) inc = (e.type === 'Credit Card' || e.type === 'Card Credit') ? cardDay(e.ccType) === 10 : true;
+      if (ed >= cS && ed <= cE) inc = (e.type === 'Credit Card' || e.type === 'Card Credit') ? !isMonthEndCard(e.ccType) : true;
     } else if (mode === 'debt-27') {
       const cS = new Date(now.getFullYear(), now.getMonth(),   1);
       const cE = new Date(now.getFullYear(), now.getMonth()+1, 0, 23, 59, 59);
-      if (ed >= cS && ed <= cE) inc = (e.type === 'Credit Card' || e.type === 'Card Credit') ? cardDay(e.ccType) === 27 : true;
+      if (ed >= cS && ed <= cE) inc = (e.type === 'Credit Card' || e.type === 'Card Credit') ? isMonthEndCard(e.ccType) : true;
     }
     if (!inc) continue;
 
@@ -3373,15 +3703,15 @@ function renderSVGFlow(container, income, expMap, net) {
     p.push(`<text transform="rotate(-90,${lmx},${lmy})" x="${lmx}" y="${lmy + 4}" text-anchor="middle" fill="#fff" font-size="10" font-family="Segoe UI,sans-serif" font-weight="600">Income</text>`);
   }
   const incLabel = income > 0 ? jpy(income) : jpy(total);
-  p.push(`<text x="${lmx}" y="${PAD_Y + incH + 13}" text-anchor="middle" fill="#8b949e" font-size="9.5" font-family="Segoe UI,sans-serif">${incLabel}</text>`);
+  p.push(`<text x="${lmx}" y="${PAD_Y + incH + 13}" text-anchor="middle" fill="var(--muted)" font-size="9.5" font-family="Segoe UI,sans-serif">${incLabel}</text>`);
 
   rNodes.forEach(node => {
     p.push(`<rect x="${RIGHT_X}" y="${node.y}" width="${NODE_W}" height="${node.h}" fill="${node.color}" rx="3"/>`);
     const ty = node.y + node.h / 2 + 4;
     const maxC = Math.floor(LABEL_W / 6.2);                   
     const name = node.name.length > maxC ? node.name.slice(0, maxC - 1) + '…' : node.name;
-    if (node.h >= 10) p.push(`<text x="${RIGHT_X + NODE_W + 7}" y="${ty}" fill="#cdd9e5" font-size="10.5" font-family="Segoe UI,sans-serif">${name}</text>`);
-    if (node.h >= 20) p.push(`<text x="${RIGHT_X + NODE_W + 7}" y="${ty + 12}" fill="#8b949e" font-size="9.5" font-family="Segoe UI,sans-serif">${jpy(node.val)}</text>`);
+    if (node.h >= 10) p.push(`<text x="${RIGHT_X + NODE_W + 7}" y="${ty}" fill="var(--text)" font-size="10.5" font-family="Segoe UI,sans-serif">${name}</text>`);
+    if (node.h >= 20) p.push(`<text x="${RIGHT_X + NODE_W + 7}" y="${ty + 12}" fill="var(--muted)" font-size="9.5" font-family="Segoe UI,sans-serif">${jpy(node.val)}</text>`);
   });
 
   p.push('</svg>');
