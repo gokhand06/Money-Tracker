@@ -9,7 +9,7 @@
  * │ context.md §12). The version string is the only thing you must change. │
  * └───────────────────────────────────────────────────────────────────────┘
  */
-const CACHE_VERSION = '2026-11-16-safesync';         // ← bump this each deploy
+const CACHE_VERSION = '2026-11-23-recur2';         // ← bump this each deploy
 const CACHE_NAME    = 'money-tracker-' + CACHE_VERSION;
 
 // The app shell (everything needed to boot offline). All same-origin & local.

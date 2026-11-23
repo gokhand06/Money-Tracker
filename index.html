@@ -1056,6 +1056,8 @@ body.light .ls-track{ background: rgba(0,0,0,0.07); }
         <option value="Joyo">💳 Joyo Card (10th bill)</option>
       </select>
       <div style="font-size:.69rem;color:var(--muted);margin-top:2px;">Card-paid items (e.g. Spotify, Nikkei News) flow into that card's billing cycle instead of immediate cash.</div>
+      <label class="inv-chk"><input type="checkbox" id="re-auto" checked>
+        <span><b>Log it automatically on the due date</b> — untick for bills whose amount changes (e.g. gas): the amount above is then only an estimate for the forecasts, and you log the real bill yourself. Investments are never logged automatically (they need the day's price).</span></label>
     </div>
     <div class="fg">
       <label>Recurrence Period</label>
@@ -1351,7 +1353,7 @@ function showInvBox(){
   g('inv-box').style.display=show?'block':'none';
   if(show)invPreview();
 }
-function resetInvForm(){{const c=g('inv-payroll');if(c)c.checked=false;}_invUnitsManual=false;_invPxAuto=true;_invInstId=null;_invFetchedFor={};g('inv-price').value='';g('inv-units').value='';g('inv-prev').innerHTML='';}
+function resetInvForm(){{const c=g('inv-payroll');if(c)c.checked=false;}{const a=g('amount');if(a)a.placeholder='Amount';}_invUnitsManual=false;_invPxAuto=true;_invInstId=null;_invFetchedFor={};g('inv-price').value='';g('inv-units').value='';g('inv-prev').innerHTML='';}
 // ── Investment form: live "what will this buy" preview ──
 // Shows the price that will be used and the units you'll receive BEFORE saving.
 // The price defaults to the instrument's last known price (refreshed in the
@@ -1912,7 +1914,9 @@ function lastSyncAt(){try{const v=Number(localStorage.getItem('financeTrackerSyn
 // (entry ids are their creation time)
 function orphanEntries(data){
   const ids=new Set((data.entries||[]).map(e=>String(e.id))),since=lastSyncAt();
-  return entries.filter(e=>!ids.has(String(e.id))&&Number(e.id)>since);
+  // creation time: the `_t` stamp (automatic payments have fixed ids), else the id itself
+  const made=e=>e._t||(Number(e.id)<8e15?Number(e.id):0);
+  return entries.filter(e=>!ids.has(String(e.id))&&made(e)>since);
 }
 // What a freshly downloaded cloud copy means for this device.
 function cloudVerdict(data){
@@ -2395,7 +2399,7 @@ function cycleRecUnpaid(start,end){
   let y=start.getFullYear(),m=start.getMonth(),ey=end.getFullYear(),em=end.getMonth();
   while(y<ey||(y===ey&&m<=em)){months.push([y,m]);m++;if(m>11){m=0;y++;}}
   for(const item of recItems){
-    if(!item.active)continue;
+    if(!item.active||item.category==='Investment')continue;   // investments aren't spending
     for(const [yy,mm] of months){
       const occ=occInMonth(item,yy,mm);
       if(!occ||occ<start||occ>end)continue;
@@ -2407,6 +2411,24 @@ function cycleRecUnpaid(start,end){
   return {cash,card};
 }
 
+// ── Recurring-item extras ──
+// Stored inside monthOverrides, which is already a synced JSON column, so no
+// cloud-script change is needed. Next to the usual month amounts ({"12":12000}):
+//   skip:   ["2026-11", …]  occurrences you undid — never auto-logged again
+//   manual: true             forecast only: you log the real amount yourself
+//                            (bills that change, e.g. gas)
+// Investments are always forecast-only: they need the day's price, which only you
+// know when you log the purchase.
+function ymKey(y,m){return y+'-'+String(m+1).padStart(2,'0');}
+function recSkipped(item,y,m){const s=item&&item.monthOverrides&&item.monthOverrides.skip;return Array.isArray(s)&&s.includes(ymKey(y,m));}
+function recAutoLogs(item){return item.category!=='Investment'&&!(item.monthOverrides&&item.monthOverrides.manual);}
+// One fixed id per item and month for automatic payments, so two devices that both
+// log the same rent create the SAME entry (a merge keeps one), and a payment whose
+// date moved into the next month (30th, Sat → 1st, Mon) is still recognised as
+// that month's payment. Ordinary ids are creation times (~1.8e12); these sit at
+// 8e15 + item(8 digits) + month index — still exact integers (< 2^53).
+function recId(item,y,m){return 8e15+(Number(item.id)%1e8)*1e5+((y-2000)*12+m);}
+function recIdItem(id){const n=Number(id);return (n>=8e15&&n<9e15)?Math.floor((n-8e15)/1e5):null;}
 function amtForMonth(item,month){
   if(item.monthOverrides){const k=String(month+1);if(item.monthOverrides[k]!==undefined)return item.monthOverrides[k];}
   return item.amount;
@@ -2416,17 +2438,36 @@ function getRecForMonth(year,month){
   return recItems.map(item=>{const d=occInMonth(item,year,month);return d?{item,date:d,amount:amtForMonth(item,month)}:null;}).filter(Boolean).sort((a,b)=>a.date-b.date);
 }
 
-// ── FIXED: strict label matching only to stop the 1080 amount bug
+// Is entry `e` the payment of recurring item `item`?
+// The label must BE the item's name (ignoring case and extra spaces), or the name
+// followed by a separator — "Rent", "rent", "Rent 2026/11", "Rent – November".
+// A name that merely appears inside another word or label does NOT count: the old
+// "contains" rule let "Times Car Rent" (Oct) and "Map Rental …" (Nov) mark the
+// rent as already paid, so it was never logged and dropped out of every forecast.
+// The name-plus-suffix form must also be the same kind of entry the item logs
+// (card purchase on that card, or the item's own category), so e.g. the NISA buy
+// "Nikkei" can never pay "Nikkei News".
+function recMatches(item,e){
+  const norm=s=>String(s||'').toLowerCase().replace(/\s+/g,' ').trim();
+  const nm=norm(item.name),lbl=norm(e.label);
+  if(!nm||!lbl)return false;
+  if(lbl===nm)return true;
+  const card=(item.payMethod&&item.payMethod!=='Cash')?item.payMethod:null;
+  const sameKind=card?(e.type==='Credit Card'&&e.ccType===card):(e.type===(item.category||'Subscription'));
+  if(!sameKind)return false;
+  const isSep=ch=>!/[\p{L}\p{N}]/u.test(ch);        // next character is not a letter or digit
+  return (lbl.startsWith(nm)&&isSep(lbl[nm.length]))||(nm.startsWith(lbl)&&lbl.length>=3&&isSep(nm[lbl.length]));
+}
 function isPaid(item,year,month){
-  const nm=(item.name||'').toLowerCase();
+  if(recSkipped(item,year,month))return true;          // undone on purpose = settled
+  const own=recId(item,year,month),key=Number(item.id)%1e8;
   return entries.some(e=>{
-    if(!e.date)return false;
+    if(Number(e.id)===own)return true;                   // the automatic payment for exactly this month
+    if(recIdItem(e.id)===key)return false;               // …another month's automatic payment of this item
+    if(!e.date||e.amount>=0)return false;
     const d=new Date(e.date+'T00:00:00');
-    if(d.getFullYear()!==year||d.getMonth()!==month||e.amount>=0)return false;
-    const lbl=(e.label||'').toLowerCase();
-    if(lbl===nm)return true;                              // exact match always counts
-    if(nm.length<3||lbl.length<3)return false;            // too short to fuzzy-match safely
-    return lbl.includes(nm)||nm.includes(lbl);
+    if(d.getFullYear()!==year||d.getMonth()!==month)return false;
+    return recMatches(item,e);
   });
 }
 
@@ -2440,10 +2481,11 @@ function nextOcc(item){
 
 // ── NEW: Auto Settle Engine & Manual Button function
 // Build a transaction from a recurring item, routed by its payment method.
-function recEntry(item,dateStr,amount){
+function recEntry(item,dateStr,amount,id){
   const card=(item.payMethod&&item.payMethod!=='Cash')?item.payMethod:null;
   return {
-    id: Date.now()+Math.floor(Math.random()*1000),
+    id: id||(Date.now()+Math.floor(Math.random()*1000)),
+    _t: Date.now(),                     // creation time (ids of automatic payments aren't times)
     type: card?'Credit Card':(item.category||'Subscription'),
     label: item.name,
     amount: -Math.abs(amount),
@@ -2454,56 +2496,89 @@ function recEntry(item,dateStr,amount){
     billingCycle: card?calcBillCycle(dateStr,card):'Immediate/Cash'
   };
 }
+// Log every recurring payment of (year, month) whose due date has come and that
+// isn't paid, skipped or forecast-only. Called for this month AND last month, so a
+// payment due on the 27th is still logged if the app is next opened on the 2nd.
 function autoSettleRecurring(year, month) {
   const today = new Date();
   today.setHours(23,59,59,999);
   let changed = false;
-
-  const recThisM = getRecForMonth(year, month);
-  recThisM.forEach(({item, date, amount}) => {
-    // If the due date has arrived or passed, and it isn't marked as paid
-    if (date <= today && !isPaid(item, year, month)) {
-      const dateStr = date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0');
-      entries.push(recEntry(item, dateStr, amount));
-      changed = true;
-    }
+  getRecForMonth(year, month).forEach(({item, date, amount}) => {
+    if (date > today || !recAutoLogs(item) || isPaid(item, year, month)) return;
+    entries.push(recEntry(item, localISO(date), amount, recId(item, year, month)));
+    changed = true;
   });
-
   if (changed) {
     localStorage.setItem('financeTrackerData',JSON.stringify(entries));
-    // upload them like any other change (debounced; this branch runs once per item)
+    // upload them like any other change (debounced)
     scheduleCloudPush();
   }
   return changed;
 }
 
-window.manuallySettleRec = function(id, dateStr, amount) {
+window.manuallySettleRec = function(id, dateStr, amount, y, m) {
   const item = recItems.find(r => r.id === id);
   if(!item) return;
-  entries.push(recEntry(item, dateStr, amount));
+  const rid = (y!=null&&m!=null) ? recId(item, y, m) : undefined;
+  if(rid && entries.some(e => Number(e.id) === rid)) return;
+  entries.push(recEntry(item, dateStr, amount, rid));
   saveRender();
 };
-
-// Reverse a settled recurring payment: remove the logged transaction(s) for that
-// item in the given month. Tries an exact name match first, then a fuzzy match.
-window.unsettleRec = function(id, year, month) {
+// For forecast-only items and investments: open the entry form filled in, so you
+// can type the real amount (or the fund price) before saving.
+function logRecViaForm(id, dateStr, amount){
   const item = recItems.find(r => r.id === id);
   if(!item) return;
+  if(editId) cancelEdit();
+  resetInvForm();
+  const card = (item.payMethod&&item.payMethod!=='Cash') ? item.payMethod : null;
+  g('type').value = card ? 'Credit Card' : (item.category||'Subscription');
+  g('label').value = item.name;
+  g('amount').value = item.category==='Investment' ? Math.abs(amount) : '';
+  g('amount').placeholder = 'about ' + Math.abs(amount).toLocaleString();
+  g('currency').value = item.currency || 'JPY';
+  if(card) g('cc-type').value = card;
+  g('date').value = dateStr;
+  onDateChange(); handleTypeChange();
+  const sb=g('sidebar');sb.classList.add('open');g('overlay').classList.add('show');if(sb.scrollTo)sb.scrollTo({top:0});
+}
+
+// Undo: remove this month's logged payment AND remember the month as skipped, so
+// the automatic logging doesn't simply put it back on the next refresh.
+function skipOccurrence(item, year, month){
+  const own = recId(item, year, month), key = Number(item.id)%1e8;
   const inMonthNeg = e => {
     if(!e.date || e.amount >= 0) return false;
     const d = new Date(e.date+'T00:00:00');
     return d.getFullYear()===year && d.getMonth()===month;
   };
-  const nm = item.name.toLowerCase();
-  let match = entries.filter(e => inMonthNeg(e) && (e.label||'')===item.name);
-  if(!match.length) match = entries.filter(e => inMonthNeg(e) &&
-      ((e.label||'').toLowerCase().includes(nm) || nm.includes((e.label||'').toLowerCase())));
-  if(!match.length){ alert('No logged payment found for this item this month. If it\u2019s in your transaction history, you can delete it there.'); return; }
-  if(!confirm(`Remove the logged "${item.name}" payment for this month? It will go back to unpaid.`)) return;
-  const ids = new Set(match.map(e=>e.id));
+  // the same rule as isPaid — never a "contains" match (that would have deleted
+  // "Map Rental BINOCULARS …" when undoing the rent)
+  const ids = new Set(entries.filter(e => Number(e.id)===own || (recIdItem(e.id)!==key && inMonthNeg(e) && recMatches(item, e))).map(e => e.id));
   entries = entries.filter(e => !ids.has(e.id));
-  saveRender();
+  const mo = Object.assign({}, item.monthOverrides||{});
+  mo.skip = [...new Set([...(Array.isArray(mo.skip)?mo.skip:[]), ymKey(year, month)])].sort().slice(-24);
+  item.monthOverrides = mo;
+  return ids.size;
+}
+window.unsettleRec = async function(id, year, month) {
+  const item = recItems.find(r => r.id === id);
+  if(!item) return;
+  const mon = MN[month]+' '+year;
+  if(!await uiConfirm(`Remove the logged "${item.name}" payment for ${mon} and skip that month?\n\nIt won't be logged again automatically. If you change your mind, use "Log it" on the item.`)) return;
+  skipOccurrence(item, year, month);
+  saveRender(); renderRMList();
 };
+// "Log it" on a skipped month: forget the skip; an automatic item is then logged
+// again by the normal check (if its date has come).
+function unskipRec(id, year, month){
+  const item = recItems.find(r => r.id === id);
+  if(!item || !item.monthOverrides || !Array.isArray(item.monthOverrides.skip)) return;
+  item.monthOverrides = Object.assign({}, item.monthOverrides, {skip: item.monthOverrides.skip.filter(k => k !== ymKey(year, month))});
+  if(!item.monthOverrides.skip.length) delete item.monthOverrides.skip;
+  if(!recAutoLogs(item)){ const o = occInMonth(item, year, month); if(o) logRecViaForm(id, localISO(o), amtForMonth(item, month)); }
+  saveRender(); renderRMList();
+}
 
 // ═══════════════════════════════════════════════
 // RECURRING CRUD
@@ -2519,7 +2594,8 @@ function parseOverrides(s){
   const r={};s.split(',').forEach(p=>{const[m,a]=p.trim().split(':');const mi=parseInt(m),av=parseFloat(a);if(!isNaN(mi)&&!isNaN(av))r[mi]=av;});
   return Object.keys(r).length?r:null;
 }
-function fmtOverrides(o){if(!o)return'';return Object.entries(o).map(([k,v])=>`${k}:${v}`).join(',');}
+function fmtOverrides(o){if(!o)return'';return Object.entries(o).filter(([k])=>/^\d+$/.test(k)).map(([k,v])=>`${k}:${v}`).join(',');}
+function hasMonthAmounts(o){return !!o&&Object.keys(o).some(k=>/^\d+$/.test(k));}
 
 function saveRec(){
   const nm=document.getElementById('re-nm').value.trim();
@@ -2534,7 +2610,11 @@ function saveRec(){
   const pay=document.getElementById('re-pay').value;
   if(!nm||isNaN(amt)||amt<=0){alert("Enter a valid name and amount.");return;}
   if(!sd){alert("Set a reference/start date.");return;}
-  const item={id:editRecId||Date.now(),name:nm,amount:amt,currency:cur,category:cat,period:per,startDate:sd,monthOverrides:ovr,note:nt,weekendAdj:wadj,adjustBack:wadj==='back',payMethod:pay,active:true};
+  const mo=Object.assign({},ovr||{});
+  const prev=editRecId?recItems.find(r=>r.id===editRecId):null;
+  if(prev&&prev.monthOverrides&&Array.isArray(prev.monthOverrides.skip))mo.skip=prev.monthOverrides.skip;   // keep skipped months
+  if(!document.getElementById('re-auto').checked)mo.manual=true;
+  const item={id:editRecId||Date.now(),name:nm,amount:amt,currency:cur,category:cat,period:per,startDate:sd,monthOverrides:Object.keys(mo).length?mo:null,note:nt,weekendAdj:wadj,adjustBack:wadj==='back',payMethod:pay,active:true};
   if(editRecId){const i=recItems.findIndex(r=>r.id===editRecId);if(i!==-1)recItems[i]={...recItems[i],...item};cancelRecEdit();}
   else recItems.push(item);
   persist();
@@ -2553,6 +2633,7 @@ function editRec(id){
   document.getElementById('re-nt').value=item.note||'';
   document.getElementById('re-wadj').value=weekendAdjOf(item);
   document.getElementById('re-pay').value=item.payMethod||'Cash';
+  document.getElementById('re-auto').checked=!(item.monthOverrides&&item.monthOverrides.manual);
   document.getElementById('re-can-btn').style.display='inline';
   onRecPer();
 }
@@ -2561,6 +2642,7 @@ function cancelRecEdit(){
   ['re-nm','re-amt','re-nt','re-sd','re-ovr'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('re-wadj').value='none';
   document.getElementById('re-pay').value='Cash';
+  document.getElementById('re-auto').checked=true;
   document.getElementById('re-can-btn').style.display='none';
 }
 function delRec(id){
@@ -2582,7 +2664,8 @@ function renderRMList(){
     const nx=item.active?nextOcc(item):null;
     const ns=nx?fmt(nx):(item.active?'—':'Inactive');
     const as=item.currency==='EUR'?`€${item.amount.toLocaleString()}`:`¥${item.amount.toLocaleString()}`;
-    const ovStr=(item.monthOverrides&&Object.keys(item.monthOverrides).length)?` <span class="bdg b-bl">Overrides</span>`:'';
+    const ovStr=(hasMonthAmounts(item.monthOverrides)?` <span class="bdg b-bl">Overrides</span>`:'')+
+      (recAutoLogs(item)?'':` <span class="bdg b-pu">${item.category==='Investment'?'Investment':'Forecast only'}</span>`);
     return`<div class="rm-it ${item.active?'':'inactive'}">
       <div style="flex:1;min-width:0;">
         <div class="rm-n">${esc(item.name)}${ovStr} <span class="muted" style="font-weight:400;font-size:.72rem;">(${item.category})</span></div>
@@ -3252,7 +3335,7 @@ function currentMonthRemaining(){
   const md=computeMonthData(y,m);
   let recCash=0,recInv=0,recCard=0;
   for(const r of getRecForMonth(y,m)){
-    if(isPaid(r.item,y,m)||r.date<=TODAY)continue;
+    if(isPaid(r.item,y,m)||(r.date<=TODAY&&recAutoLogs(r.item)))continue;   // forecast-only items stay expected until you log them
     const val=r.item.currency==='EUR'?r.amount*eurRate:r.amount;
     const isCard=r.item.payMethod&&r.item.payMethod!=='Cash';
     if(r.item.category==='Investment')recInv+=val;
@@ -3337,8 +3420,12 @@ function renderDashboard(){
   // ── TRIGGER AUTO SETTLE ENGINE ──
   // Only settle for the ACTUAL current month, never the month being browsed,
   // so navigating to past months can't spawn back-dated entries.
-  if (_bootReady && autoSettleRecurring(TODAY.getFullYear(), TODAY.getMonth())) {
-      console.log("Auto-settle engine logged an expired transaction successfully.");
+  // this month and last month (catch-up when the app wasn't opened at month-end);
+  // never before the start-up cloud check
+  if (_bootReady) {
+    let pm=TODAY.getMonth()-1, py=TODAY.getFullYear(); if(pm<0){pm=11;py--;}
+    autoSettleRecurring(py, pm);
+    autoSettleRecurring(TODAY.getFullYear(), TODAY.getMonth());
   }
 
   updMNav();
@@ -3524,27 +3611,32 @@ function renderUpcoming(items){
   if(!items.length){c.innerHTML='<div class="muted" style="font-size:.82rem;">No recurring payments due this month.</div>';return;}
   const futM=!isCurM()&&!isPastM();
   c.innerHTML=items.map(({item,date,amount})=>{
-    const paid=isPaid(item,vY,vM);
-    const isInv=item.category==='Investment';
+    const skipped=recSkipped(item,vY,vM);
+    const paid=!skipped&&isPaid(item,vY,vM);
+    const isInv=item.category==='Investment',auto=recAutoLogs(item);
     const amtStr=item.currency==='EUR'?`€${amount.toLocaleString()}`:`¥${amount.toLocaleString()}`;
-    const d=date.getDate();const sfx=d===1?'st':d===2?'nd':d===3?'rd':'th';
+    const d=date.getDate();const sfx=(d%10===1&&d!==11)?'st':(d%10===2&&d!==12)?'nd':(d%10===3&&d!==13)?'rd':'th';   // 21st, 22nd, 23rd
     let bc=paid?'paid':isInv?'inv':futM?'fut':'';
 
     // Manual Settle logic format for elements that have NOT been auto-paid
     const dateFmt = date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0');
-    const btnHtml = paid
-      ? `<button class="bsm" style="background:#7f8c8d; margin-left:10px; cursor:pointer;" onclick="unsettleRec(${item.id}, ${vY}, ${vM})" title="Remove the logged payment for this month">↩ Undo</button>`
-      : (!isInv ? `<button class="bsm" style="background:var(--purple); margin-left:10px; cursor:pointer;" onclick="manuallySettleRec(${item.id}, '${dateFmt}', ${amount})">Settle</button>` : '');
+    const btnHtml = skipped
+      ? `<button class="bsm" style="background:#7f8c8d; margin-left:10px; cursor:pointer;" onclick="unskipRec(${item.id}, ${vY}, ${vM})" title="You skipped this month — bring it back">Log it</button>`
+      : paid
+      ? `<button class="bsm" style="background:#7f8c8d; margin-left:10px; cursor:pointer;" onclick="unsettleRec(${item.id}, ${vY}, ${vM})" title="Remove the logged payment and skip this month">↩ Undo</button>`
+      : auto
+      ? `<button class="bsm" style="background:var(--purple); margin-left:10px; cursor:pointer;" onclick="manuallySettleRec(${item.id}, '${dateFmt}', ${amount}, ${vY}, ${vM})">Settle</button>`
+      : `<button class="bsm" style="background:var(--purple); margin-left:10px; cursor:pointer;" onclick="logRecViaForm(${item.id}, '${dateFmt}', ${amount})" title="Open the form to enter the real amount">Log…</button>`;
     const card=(item.payMethod&&item.payMethod!=='Cash')?item.payMethod:null;
     const payBadge=card?`<span class="muted" style="font-size:.66rem;">· 💳 ${card}</span>`:`<span class="muted" style="font-size:.66rem;">· 💴 Cash</span>`;
 
     return`<div class="rec-it ${bc}">
       <div>
-        <div class="rec-n">${esc(item.name)}${paid?'<span class="pbdg">✓ Paid</span>':''} <span class="muted" style="font-size:.67rem;">${PL[item.period]||item.period}</span></div>
-        <div class="rec-m">${item.category} · Due ${d}${sfx} ${payBadge}${item.note?' · '+item.note:''}</div>
+        <div class="rec-n">${esc(item.name)}${paid?'<span class="pbdg">✓ Paid</span>':skipped?'<span class="pbdg" style="opacity:.75;">Skipped</span>':''} <span class="muted" style="font-size:.67rem;">${PL[item.period]||item.period}</span></div>
+        <div class="rec-m">${item.category} · Due ${d}${sfx} ${payBadge}${auto?'':' · <span class="muted">'+(isInv?'you log it with the price':'estimate — you log the real amount')+'</span>'}${item.note?' · '+esc(item.note):''}</div>
       </div>
       <div style="display:flex; align-items:center;">
-        <div class="rec-a" style="color:${paid?'var(--green)':isInv?'var(--accent)':'var(--red)'};">${paid?'':isInv?'':'−'}${amtStr}</div>
+        <div class="rec-a" style="color:${paid||skipped?'var(--muted)':isInv?'var(--accent)':'var(--red)'};${skipped?'text-decoration:line-through;':''}">${paid||skipped||isInv?'':'−'}${auto||isInv?'':'≈'}${amtStr}</div>
         ${btnHtml}
       </div>
     </div>`;
